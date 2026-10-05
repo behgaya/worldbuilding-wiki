@@ -1,0 +1,47 @@
+{
+  "section": "people",
+  "type": "character",
+  "canon": "canon",
+  "visibility": "public",
+  "development": "stub",
+  "memberships": [
+    { "group": "Test Team Alpha", "status": "current" }
+  ],
+  "slug": "oskar-venn",
+  "name": "Oskar Venn",
+  "caption": "Test Team Alpha",
+  "infobox": [
+    {
+      "title": "Personal",
+      "rows": [
+        {
+          "label": "Age",
+          "value": "Unknown"
+        },
+        {
+          "label": "Height",
+          "value": "1.85 m"
+        }
+      ]
+    },
+    {
+      "title": "Combat",
+      "rows": [
+        {
+          "label": "Member of",
+          "value": "Test Team Alpha"
+        }
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "heading": "Personality",
+      "text": "TEST DATA. No title, to check the page without one. \"Unknown\" is a valid value."
+    },
+    {
+      "heading": "Backstory",
+      "text": "TODO: placeholder backstory."
+    }
+  ]
+}

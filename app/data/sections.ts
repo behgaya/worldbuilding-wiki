@@ -14,7 +14,7 @@ export const sections: Section[] = [
   {
     name: 'Places',
     slug: 'places',
-    description: 'TODO: description',
+    description: 'The world map and its nations, regions and states, with their cultures, governments and landmarks.',
     subsections: [
       { name: 'World map', slug: 'world-map' },
       { name: 'Zhoter', slug: 'zhoter' },
@@ -23,7 +23,7 @@ export const sections: Section[] = [
   {
     name: 'Powers',
     slug: 'powers',
-    description: 'TODO: description',
+    description: 'How Order, Chaos and Void work: elements, techniques, contracts and the rules that bind them.',
     subsections: [
       { name: 'Order', slug: 'order' },
       { name: 'Chaos', slug: 'chaos' },
@@ -33,7 +33,7 @@ export const sections: Section[] = [
   {
     name: 'People',
     slug: 'people',
-    description: 'TODO: description',
+    description: 'The characters of the world and the teams, guilds and organizations they belong to.',
     subsections: [
       { name: 'Characters', slug: 'characters' },
       { name: 'Groups', slug: 'groups' },
@@ -42,7 +42,7 @@ export const sections: Section[] = [
   {
     name: 'Bestiary',
     slug: 'bestiary',
-    description: 'TODO: description',
+    description: 'Monsters, spirits and other creatures, and how hunters deal with them.',
     subsections: [
       { name: 'Incomplete Beings', slug: 'incomplete-beings' },
       { name: 'Anomalies', slug: 'anomalies' },
@@ -52,7 +52,7 @@ export const sections: Section[] = [
   {
     name: 'Objects',
     slug: 'objects',
-    description: 'TODO: description',
+    description: 'Crystals, cursed objects, potions, equipment and the technology of everyday life.',
     subsections: [
       { name: 'Crystals', slug: 'crystals' },
       { name: 'Cursed Objects', slug: 'cursed-objects' },
@@ -63,7 +63,7 @@ export const sections: Section[] = [
   {
     name: 'Lore',
     slug: 'lore',
-    description: 'TODO: description',
+    description: 'History, institutions, concepts and legends: the stories behind the world.',
     subsections: [
       { name: 'History', slug: 'history' },
       { name: 'Institutions', slug: 'institutions' },

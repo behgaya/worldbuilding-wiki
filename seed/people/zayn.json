@@ -1,0 +1,57 @@
+{
+  "section": "people",
+  "type": "character",
+  "slug": "zayn",
+  "name": "Zayn Alaric Wells",
+  "title": "The Molten Dragon",
+  "caption": "Team Vulcan",
+  "canon": "canon",
+  "visibility": "public",
+  "development": "partial",
+  "memberships": [
+    { "group": "Team Vulcan", "status": "current" }
+  ],
+  "infobox": [
+    {
+      "title": "Personal",
+      "rows": [
+        { "label": "Age", "value": "19" },
+        { "label": "Birthday", "value": "April 21st" },
+        { "label": "Birth Year", "value": "1900" },
+
+        { "label": "Eye color", "value": "Orange" },
+        { "label": "Gender", "value": "Masculine" },
+        { "label": "Hair color", "value": "Brown" },
+        { "label": "Height", "value": "1.77 m" },
+        { "label": "Hobby", "value": "Blacksmithing" },
+        
+        { "label": "Phobia", "value": "Coulrophobia" }
+      ]
+    },
+    {
+      "title": "Origin",
+      "rows": [{ "label": "Hometown", "value": "Xobbote" }]
+    },
+    {
+      "title": "Relationships",
+      "rows": [
+        { "label": "Partner", "value": "Susie" },
+        { "label": "Rivals", "value": "Kai and Jonathan" }
+      ]
+    },
+    {
+      "title": "Combat",
+      "rows": [
+        { "label": "Bending", "value": "Lava" },
+        { "label": "Class", "value": "Duelist" },
+        { "label": "Member of", "value": "Team Vulcan" },
+        { "label": "Weapon", "value": "Greatsword" }
+      ]
+    }
+  ],
+  "sections": [
+    { "heading": "Personality", "text": "TODO: personality text." },
+    { "heading": "Backstory", "text": "TODO: backstory text." },
+    { "heading": "Character Flaws", "text": "TODO: character flaws text." }
+  ]
+}

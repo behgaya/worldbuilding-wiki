@@ -1,0 +1,14 @@
+{
+  "section": "people",
+  "type": "character",
+  "canon": "canon",
+  "visibility": "public",
+  "development": "stub",
+  "memberships": [
+    { "group": "Test Team Beta", "status": "planned" }
+  ],
+  "slug": "tamsin-reed",
+  "name": "Tamsin Reed",
+  "infobox": [],
+  "sections": []
+}

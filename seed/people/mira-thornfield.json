@@ -1,0 +1,60 @@
+{
+  "section": "people",
+  "type": "character",
+  "canon": "canon",
+  "visibility": "public",
+  "development": "partial",
+  "memberships": [
+    { "group": "Test Team Alpha", "status": "current" }
+  ],
+  "slug": "mira-thornfield",
+  "name": "Mira Thornfield",
+  "title": "The Quiet Lantern",
+  "caption": "Test Team Alpha",
+  "infobox": [
+    {
+      "title": "Personal",
+      "rows": [
+        {
+          "label": "Age",
+          "value": "24"
+        },
+        {
+          "label": "Gender",
+          "value": "Feminine"
+        },
+        {
+          "label": "Hobby",
+          "value": "Cartography"
+        }
+      ]
+    },
+    {
+      "title": "Combat",
+      "rows": [
+        {
+          "label": "Class",
+          "value": "Scout"
+        },
+        {
+          "label": "Member of",
+          "value": "Test Team Alpha"
+        },
+        {
+          "label": "Weapon",
+          "value": "Shortbow"
+        }
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "heading": "Personality",
+      "text": "TEST DATA. A fuller test entry: title, caption and two infobox groups."
+    },
+    {
+      "heading": "Backstory",
+      "text": "TODO: placeholder backstory."
+    }
+  ]
+}
