@@ -1,0 +1,78 @@
+:root {
+  --bg: #f4ecd8;
+  --surface: #fbf6e9;
+  --ink: #2b2118;
+  --muted: #6b5a45;
+  --accent: #8a6d1f;
+  --border: #c9b58c;
+  --font-body: 'EB Garamond', Georgia, serif;
+  --font-heading: 'Cinzel', Georgia, serif;
+  --radius: 6px;
+  color-scheme: light;
+}
+
+/* Dark palette: used when chosen with the toggle, or by default when the OS prefers dark
+   and no choice has been saved. */
+:root[data-theme='dark'] {
+  --bg: #1c1712;
+  --surface: #26201a;
+  --ink: #ece3d0;
+  --muted: #b3a58c;
+  --accent: #d4af5a;
+  --border: #4a3f30;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #1c1712;
+    --surface: #26201a;
+    --ink: #ece3d0;
+    --muted: #b3a58c;
+    --accent: #d4af5a;
+    --border: #4a3f30;
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1.125rem;
+  line-height: 1.6;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-heading);
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 0.15em;
+}
+
+a:hover {
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}

@@ -73,7 +73,22 @@ function onItemFocusout(e: FocusEvent, slug: string) {
 }
 
 // Document listeners only exist in the browser, so attach them after mount and clean up on unmount.
+// Dark mode. The server can't know the visitor's theme, so isDark starts false and is
+// corrected on mount. The saved choice is applied earlier by a head script in nuxt.config.ts.
+const isDark = ref(false)
+
+function toggleTheme() {
+  isDark.value = !isDark.value
+  const theme = isDark.value ? 'dark' : 'light'
+  document.documentElement.dataset.theme = theme
+  try {
+    localStorage.setItem('theme', theme)
+  } catch {}
+}
+
 onMounted(() => {
+  const saved = document.documentElement.dataset.theme
+  isDark.value = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
   document.addEventListener('click', onDocumentClick)
   document.addEventListener('keydown', onDocumentKeydown)
 })
@@ -90,6 +105,13 @@ watch(() => route.path, closeAll)
 <template>
   <nav ref="navEl">
     <NuxtLink to="/">Worldbuilding Wiki</NuxtLink>
+    <button
+      class="theme-toggle"
+      :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+      @click="toggleTheme"
+    >
+      {{ isDark ? '☀' : '☾' }}
+    </button>
     <button
       ref="hamburgerEl"
       class="hamburger"
@@ -133,6 +155,27 @@ nav {
   display: flex;
   align-items: center;
   gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+nav > a:first-child {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  color: var(--ink);
+  text-decoration: none;
+  margin-right: 1rem;
+}
+
+.section > a,
+.dropdown a {
+  text-decoration: none;
+}
+
+.section > a:hover,
+.dropdown a:hover {
+  text-decoration: underline;
 }
 
 ul {
@@ -166,9 +209,10 @@ ul {
   z-index: 10;
   min-width: 10rem;
   padding: 0.5rem;
-  background: Canvas;
-  color: CanvasText;
-  border: 1px solid;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgb(43 33 24 / 0.12);
 }
 
 .dropdown li + li {
@@ -177,11 +221,31 @@ ul {
 
 .hamburger {
   display: none;
+  padding: 0.25rem 0.75rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+/* Last on wide screens (after the links); beside the hamburger on narrow ones. */
+.theme-toggle {
+  order: 1;
+  margin-left: auto;
+  padding: 0.25rem 0.6rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
 }
 
 @media (max-width: 640px) {
   nav {
     flex-wrap: wrap;
+  }
+
+  .theme-toggle {
+    order: 0;
   }
 
   .hamburger {
@@ -202,6 +266,7 @@ ul {
   .dropdown {
     position: static;
     border: none;
+    box-shadow: none;
     padding: 0.25rem 0 0 1rem;
   }
 }

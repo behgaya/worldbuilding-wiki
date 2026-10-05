@@ -43,6 +43,12 @@ main {
   padding: 1rem;
 }
 
+main > p {
+  font-size: 1.25rem;
+  font-style: italic;
+  color: var(--muted);
+}
+
 .cards {
   list-style: none;
   margin: 0;
@@ -57,23 +63,28 @@ main {
   height: 100%;
   box-sizing: border-box;
   padding: 1rem;
-  border: 1px solid;
-  border-radius: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   color: inherit;
   text-decoration: none;
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
 }
 
 .card:hover,
 .card:focus-visible {
-  outline: 2px solid;
-  outline-offset: -1px;
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgb(43 33 24 / 0.12);
 }
 
 .card h3 {
   margin: 0 0 0.5rem;
+  color: var(--accent);
 }
 
 .card p {
   margin: 0;
+  color: var(--muted);
 }
 </style>
