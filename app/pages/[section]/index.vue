@@ -21,6 +21,9 @@ useHead({ title: () => section.value?.name ?? 'Section not found' })
           <NuxtLink :to="`/${section.slug}/${sub.slug}`" class="card">{{ sub.name }}</NuxtLink>
         </li>
       </ul>
+
+      <!-- The one section-specific part of this page: the nations list on /places. -->
+      <PlaceNations v-if="section.slug === 'places'" />
     </template>
 
     <template v-else>

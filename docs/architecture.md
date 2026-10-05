@@ -12,7 +12,7 @@ server/utils/entries.ts          the only code that reads seed files
         │
 server/api/entries/[section]/
   [slug].get.ts   index.get.ts   JSON for one entry / a list of summaries
-                                 (characters and groups; ?type= picks one)
+                                 (characters, groups, places; ?type= picks one)
         │
 app/pages/...                    useFetch the JSON and display it
 ```
@@ -53,7 +53,7 @@ In section text, the intro and infobox values:
 
 **The link rule:** a link is only made when the target exists, its visibility is exactly `public`, it is not `retired`, and its type has a page. Every other case renders **plain text**, either your custom text or the slug exactly as written. There's no link and no hint in the HTML, and a hidden entry's real name never appears. A slug used in two sections can't be linked until one is renamed.
 
-The URL is built only from the target's section, type and slug, for example `/people/characters/susie` or `/people/groups/team-vulcan`. Types with pages are listed in `TYPE_PATHS` in `entries.ts` (today `character` and `group`).
+The URL is built only from the target's section, type and slug, for example `/people/characters/susie`, `/people/groups/team-vulcan` or `/places/trovic`. Every URL comes from one helper, `hrefFor(section, type, slug)`, used by links, backlinks, member lists and breadcrumbs. Types with pages are listed in `TYPE_PATHS` in `entries.ts` (today `character`, `group` and `place`). A type's path segment may be empty (places), so whether a type has a page is always tested with `hasPage(type)`, never with `TYPE_PATHS[type]`.
 
 Rendering is a markdown-it inline rule in `entries.ts`, with raw HTML disabled. The rendered HTML is what the API sends, so pages can show it with `v-html`. `renderMarkdown` also returns the list of links it found, which backlinks use.
 
@@ -83,7 +83,26 @@ memberships:
 
 **Order:** group lists are sorted by `order` (ascending), ties by name, and groups without an `order` come last. On the character list, team headings follow that order and "Unaffiliated" is always last.
 
-The list endpoint takes `?type=character` or `?type=group`. Any other value answers 400.
+The list endpoint takes `?type=character`, `?type=group` or `?type=place` (the types in `TYPE_PATHS`). Any other value answers 400.
+
+## Places
+
+A place is an entry of `type: place` in `seed/places/`, for example `seed/places/trovic.md`. Besides the usual fields it has:
+
+| Field | Values |
+| --- | --- |
+| `kind` | required: `world`, `landmass`, `nation`, `region`, `state` |
+| `parent` | optional: the slug of the place it sits in |
+| `order` | optional whole number: order among its siblings, as for groups |
+| `caption` | optional: for a state, its nickname ("Engine of Zhoter") |
+
+Any other value makes the file invalid. There are no game rules (a state may sit anywhere). Slugs are global, so regions are prefixed by their nation: `zhoter-north`, `zhoter-east` and so on. States and nations use plain slugs (`trovic`, `xobbote`).
+
+**URLs** have no type segment: `/places/zhoter`, `/places/trovic`. `/places` itself is the generic section page, with a list of public nations.
+
+**Children are derived, never written down.** A place's answer has `children`: the public, non-retired places whose `parent` is this place, sorted by `order` (same rule as groups). It goes **two levels deep and no further**: Zhoter returns its regions, each with its states. A region returns its states, each with an empty list. Each child is `{ slug, name, caption, kind, href, children? }`. A place under a hidden parent is unreachable: a state under a hidden region appears in no list, and nothing about it leaks.
+
+**Breadcrumb:** `breadcrumb` lists the ancestors, nearest first (the page shows them top-down: Zhoter › North). The walk goes up through `parent` and includes an ancestor only if it is a public, non-retired place. It **stops at the first ancestor that isn't** (hidden, retired, missing or not a place), and nothing above that point is shown. It is cycle-safe: a visited set and a cap of 8 steps mean it can never loop. It never includes the entry itself. The `parent` field itself is never sent to the browser.
 
 ## Backlinks
 
@@ -100,5 +119,5 @@ There is one backlink per source, however many times it links. They are sorted b
 
 ## Commands
 
-- `npm run check` lists every `[[link]]` and every membership whose target is missing (error), not a group (memberships, error) or not public (warning). It covers every entry, hidden sections and rows included, and prints the file, section or infobox row, and slug. It exits with code 1 on any error, and invalid files are errors too. It needs Node 22.18+ or 23.6+, which can run `.ts` files directly.
+- `npm run check` lists every `[[link]]` and every membership whose target is missing (error), not a group (memberships, error) or not public (warning). For places it checks `parent`: missing → error, not a place → error, not public → warning, and a cycle (A → B → A, or a place that is its own parent) → error. It covers every entry, hidden sections and rows included, and prints the file, section or infobox row, and slug. It exits with code 1 on any error, and invalid files are errors too. It needs Node 22.18+ or 23.6+, which can run `.ts` files directly.
 - `npm test` runs the Vitest tests in `tests/`.

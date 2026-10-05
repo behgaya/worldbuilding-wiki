@@ -31,7 +31,7 @@ useHead({ title: () => group.value?.name ?? 'Entry not found' })
             <h2>Members</h2>
             <ul>
               <li v-for="m in group.members" :key="m.slug">
-                <NuxtLink :to="`/people/characters/${m.slug}`">{{ m.name }}</NuxtLink>
+                <NuxtLink :to="m.href">{{ m.name }}</NuxtLink>
                 <span v-if="m.title" class="member-title">{{ m.title }}</span>
               </li>
             </ul>

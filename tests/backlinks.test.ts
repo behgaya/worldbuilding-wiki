@@ -77,7 +77,7 @@ describe('backlinks', () => {
     const all = load({
       susie: entry('susie', { name: 'Susie', type: 'group', kind: 'hunter-team', status: 'registered' }),
       old: entry('old', { canon: 'retired' }, '[[susie]]'),
-      place: entry('place', { type: 'place' }, '[[susie]]'),
+      creature: entry('creature', { type: 'creature' }, '[[susie]]'), // a type with no page yet
       member: entry('member', {}, '', 'memberships:\n  - { group: susie, status: current }\n'),
     })
     expect(slugs(all)).toEqual([])

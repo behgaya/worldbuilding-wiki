@@ -9,11 +9,13 @@ const DEVELOPMENT = ['stub', 'partial', 'developed'] as const
 const MEMBERSHIP_STATUS = ['current', 'former', 'planned'] as const
 const GROUP_KINDS = ['hunter-team', 'guild', 'cult', 'npc-group'] as const
 const GROUP_STATUS = ['registered', 'lupin', 'unregistered', 'disbanded'] as const
+const PLACE_KINDS = ['world', 'landmass', 'nation', 'region', 'state'] as const
 
 type Canon = (typeof CANON)[number]
 type Visibility = (typeof VISIBILITY)[number]
 type GroupKind = (typeof GROUP_KINDS)[number]
 type GroupStatus = (typeof GROUP_STATUS)[number]
+type PlaceKind = (typeof PLACE_KINDS)[number]
 
 export interface Membership {
   group: string // the group's slug, e.g. "team-vulcan"
@@ -29,6 +31,24 @@ export interface Member {
   slug: string
   name: string
   title?: string
+  href: string
+}
+
+// One step of a place's breadcrumb (an ancestor place).
+export interface Crumb {
+  slug: string
+  name: string
+  href: string
+}
+
+// A child place in a place's children block. Only the first level carries `children`.
+export interface PlaceChild {
+  slug: string
+  name: string
+  caption?: string
+  kind: PlaceKind
+  href: string
+  children?: PlaceChild[]
 }
 
 export interface Backlink {
@@ -41,7 +61,7 @@ export interface Backlink {
 
 // What the API sends for one entry. Only public rows and sections are left. Long text and
 // infobox values are HTML rendered here with raw HTML disabled. Memberships are only current
-// ones to public groups. Group-only fields are set for groups and left out otherwise.
+// ones to public groups. Group- and place-only fields are set for those types and left out otherwise.
 export interface Entry {
   section: string
   type: string
@@ -56,17 +76,19 @@ export interface Entry {
   infobox: { title: string; rows: InfoRow[] }[]
   intro?: string
   sections: { heading: string; html: string; canon: Canon }[]
-  kind?: GroupKind
+  kind?: GroupKind | PlaceKind
   status?: GroupStatus
   order?: number
   members?: Member[]
+  breadcrumb?: Crumb[] // nearest ancestor first
+  children?: PlaceChild[]
   backlinks: Backlink[]
 }
 
 // What list pages get: enough to show, group and order an entry, never its sections or infobox.
 export type EntrySummary = Pick<
   Entry,
-  'slug' | 'type' | 'name' | 'title' | 'caption' | 'development' | 'canon' | 'order'
+  'slug' | 'type' | 'name' | 'title' | 'caption' | 'development' | 'canon' | 'order' | 'kind'
 > & {
   memberships: Membership[]
 }
@@ -130,9 +152,10 @@ export interface RawEntry {
   infobox: { title: string; rows: { label: string; value?: string; visible: boolean }[] }[]
   intro: string
   sections: { heading: string; src: string; visible: boolean; canon: Canon }[]
-  kind?: GroupKind
+  kind?: GroupKind | PlaceKind
   status?: GroupStatus
   order?: number
+  parent?: string // places only; never sent to the browser
 }
 
 const isOneOf = <T extends readonly string[]>(list: T, v: unknown): v is T[number] =>
@@ -210,6 +233,16 @@ function parseGroupFields(data: Record<string, unknown>) {
   return { kind: data.kind, status: data.status, order: data.order as number | undefined }
 }
 
+// Place-only fields. Called only for type: place. No game rules (a state may sit anywhere).
+function parsePlaceFields(data: Record<string, unknown>) {
+  if (!isOneOf(PLACE_KINDS, data.kind)) throw new InvalidEntry(`kind must be one of ${PLACE_KINDS.join(', ')}`)
+  if (data.parent !== undefined && (typeof data.parent !== 'string' || !SAFE_NAME.test(data.parent)))
+    throw new InvalidEntry(`parent must be a place slug like zhoter, got ${JSON.stringify(data.parent)}`)
+  if (data.order !== undefined && !Number.isInteger(data.order))
+    throw new InvalidEntry(`order must be a whole number, got ${JSON.stringify(data.order)}`)
+  return { kind: data.kind, parent: data.parent as string | undefined, order: data.order as number | undefined }
+}
+
 // Turns one seed file into a RawEntry, or throws InvalidEntry with a reason. Pure: no file access.
 export function parseEntry(text: string, section: string, slug: string): RawEntry {
   const normalised = text.replace(/^﻿/, '').replace(/\r\n?/g, '\n')
@@ -225,6 +258,7 @@ export function parseEntry(text: string, section: string, slug: string): RawEntr
     throw new InvalidEntry(`development must be one of ${DEVELOPMENT.join(', ')}`)
   const type = optionalString(data.type, 'type') ?? ''
   const group = type === 'group' ? parseGroupFields(data) : undefined
+  const place = type === 'place' ? parsePlaceFields(data) : undefined
 
   if (!Array.isArray(data.memberships ?? [])) throw new InvalidEntry('memberships must be a list')
   const memberships = ((data.memberships ?? []) as unknown[]).map((m, i) => {
@@ -271,9 +305,10 @@ export function parseEntry(text: string, section: string, slug: string): RawEntr
       const { heading, visible, canon } = parseHeading(line)
       return { heading, src: lines.join('\n').trim(), visible, canon: canon ?? (data.canon as Canon) }
     }),
-    kind: group?.kind,
+    kind: group?.kind ?? place?.kind,
     status: group?.status,
-    order: group?.order,
+    order: group?.order ?? place?.order,
+    parent: place?.parent,
   }
 }
 
@@ -327,11 +362,19 @@ const byName = (a: { name: string }, b: { name: string }) =>
 // but it never leaves this file: only the rendered HTML does.
 // ---------------------------------------------------------------------------------------------
 
-// Page path for each entry type that has a page. Types without one can't be linked yet.
-const TYPE_PATHS: Record<string, string> = { character: 'characters', group: 'groups' }
+// Page path segment for each entry type that has a page. An empty segment is left out of the URL
+// (places live at /places/<slug>). Types not listed here have no page and can't be linked yet.
+const TYPE_PATHS: Record<string, string> = { character: 'characters', group: 'groups', place: '' }
+
+// Whether a type has a page. Always test with this, never with TYPE_PATHS[type] (place is '').
+const hasPage = (type: string) => Object.hasOwn(TYPE_PATHS, type)
+
+// The one place URLs are built: /people/characters/zayn, /people/groups/team-vulcan, /places/trovic.
+export const hrefFor = (section: string, type: string, slug: string) =>
+  '/' + [section, TYPE_PATHS[type], slug].filter(Boolean).join('/')
 
 // For ?type= on the list endpoint: only types the wiki knows about.
-export const isKnownType = (type: unknown): type is string => typeof type === 'string' && Object.hasOwn(TYPE_PATHS, type)
+export const isKnownType = (type: unknown): type is string => typeof type === 'string' && hasPage(type)
 
 export type LinkStatus = 'ok' | 'not-public' | 'retired' | 'no-page' | 'invalid' | 'ambiguous'
 
@@ -347,7 +390,7 @@ export type EntryIndex = Map<string, IndexEntry>
 function indexStatus(entry: RawEntry): LinkStatus {
   if (entry.visibility !== 'public') return 'not-public'
   if (entry.canon === 'retired') return 'retired'
-  if (!TYPE_PATHS[entry.type]) return 'no-page'
+  if (!hasPage(entry.type)) return 'no-page'
   return 'ok'
 }
 
@@ -402,7 +445,7 @@ const wikiLinkRule: InlineRule = (state, silent) => {
     if (resolved) {
       const open = state.push('link_open', 'a', 1)
       // Built only from index fields, never from the text the author typed.
-      open.attrs = [['href', `/${target.section}/${TYPE_PATHS[target.type]}/${slug}`]]
+      open.attrs = [['href', hrefFor(target.section, target.type, slug)]]
       state.push('text', '', 0).content = text
       state.push('link_close', 'a', -1)
     } else {
@@ -453,13 +496,13 @@ export function membersOf(groupSlug: string, all: LoadedFile[]): Member[] {
   return validEntries(all)
     .filter((e) => e.type === 'character' && e.visibility === 'public')
     .filter((e) => e.memberships.some((m) => m.group === groupSlug && m.status === 'current'))
-    .map((e) => ({ slug: e.slug, name: e.name, title: e.title }))
+    .map((e) => ({ slug: e.slug, name: e.name, title: e.title, href: hrefFor(e.section, e.type, e.slug) }))
     .sort(byName)
 }
 
-// Groups by `order` (ascending), ties by name, groups without an order last.
-export function sortGroups<T extends { name: string; order?: number }>(groups: T[]): T[] {
-  return [...groups].sort((a, b) => {
+// Groups and places by `order` (ascending), ties by name, those without an order last.
+export function sortByOrder<T extends { name: string; order?: number }>(items: T[]): T[] {
+  return [...items].sort((a, b) => {
     if (a.order !== undefined && b.order !== undefined && a.order !== b.order) return a.order - b.order
     if ((a.order === undefined) !== (b.order === undefined)) return a.order === undefined ? 1 : -1
     return byName(a, b)
@@ -467,10 +510,56 @@ export function sortGroups<T extends { name: string; order?: number }>(groups: T
 }
 
 // ---------------------------------------------------------------------------------------------
-// Backlinks: "pages that link here", from [[links]] only (memberships don't count).
+// Places: children and breadcrumbs, derived from each place's `parent`. Only public, non-retired
+// places are ever reached, so nothing below or above a hidden place leaks.
 // ---------------------------------------------------------------------------------------------
 
-const hrefFor = (e: { section: string; type: string; slug: string }) => `/${e.section}/${TYPE_PATHS[e.type]}/${e.slug}`
+const isLinkablePlace = (index: EntryIndex, slug: string) => {
+  const target = index.get(slug)
+  return target?.status === 'ok' && target.type === 'place'
+}
+
+// Public places whose parent is this slug, sorted by order. Two levels: the children carry their
+// own children (depth 2), and those don't carry any further.
+export function childrenOf(parentSlug: string, all: LoadedFile[], index: EntryIndex = indexFrom(all), depth = 2): PlaceChild[] {
+  const kids = validEntries(all).filter(
+    (e) => e.type === 'place' && e.parent === parentSlug && isLinkablePlace(index, e.slug),
+  )
+  return sortByOrder(kids).map((e) => {
+    const child: PlaceChild = {
+      slug: e.slug,
+      name: e.name,
+      caption: e.caption,
+      kind: e.kind as PlaceKind,
+      href: hrefFor(e.section, e.type, e.slug),
+    }
+    if (depth > 1) child.children = childrenOf(e.slug, all, index, depth - 1)
+    return child
+  })
+}
+
+const BREADCRUMB_MAX = 8
+
+// Ancestors of a place, nearest first. Stops at the first ancestor that isn't a public,
+// non-retired place (nothing above it is shown), at a cycle, or after 8 steps. Never the entry itself.
+export function breadcrumbOf(slug: string, all: LoadedFile[], index: EntryIndex = indexFrom(all)): Crumb[] {
+  const places = new Map(validEntries(all).filter((e) => e.type === 'place').map((e) => [e.slug, e]))
+  const crumbs: Crumb[] = []
+  const seen = new Set([slug])
+  let parent = places.get(slug)?.parent
+  for (let step = 0; parent && step < BREADCRUMB_MAX; step++) {
+    const ancestor = places.get(parent)
+    if (seen.has(parent) || !ancestor || !isLinkablePlace(index, parent)) break
+    crumbs.push({ slug: ancestor.slug, name: ancestor.name, href: hrefFor(ancestor.section, ancestor.type, ancestor.slug) })
+    seen.add(parent)
+    parent = ancestor.parent
+  }
+  return crumbs
+}
+
+// ---------------------------------------------------------------------------------------------
+// Backlinks: "pages that link here", from [[links]] only (memberships don't count).
+// ---------------------------------------------------------------------------------------------
 
 // Every public entry whose PUBLIC text links to the target. Fail closed: a source counts only if
 // it is public, not retired and has a page (index status 'ok'), and only links in its intro,
@@ -495,7 +584,7 @@ export function backlinksTo(targetSlug: string, all: LoadedFile[], index: EntryI
         type: source.type,
         slug: source.slug,
         name: source.name,
-        href: hrefFor(source),
+        href: hrefFor(source.section, source.type, source.slug),
       })
     }
   }
@@ -536,6 +625,12 @@ function renderEntry(raw: RawEntry, index: EntryIndex, all: LoadedFile[]): Entry
     entry.order = raw.order
     entry.members = membersOf(raw.slug, all)
   }
+  if (raw.type === 'place') {
+    entry.kind = raw.kind
+    entry.order = raw.order
+    entry.breadcrumb = breadcrumbOf(raw.slug, all, index)
+    entry.children = childrenOf(raw.slug, all, index)
+  }
   return entry
 }
 
@@ -559,8 +654,8 @@ export async function getEntry(section: string, slug: string): Promise<Entry | n
   return entryFrom(await loadAll(), section, slug)
 }
 
-// Public entries of a section as summaries, optionally of one type. Groups come sorted by
-// `order`; everything else by name.
+// Public entries of a section as summaries, optionally of one type. Groups and places come
+// sorted by `order`; everything else by name.
 export async function listEntries(section: string, type?: string): Promise<EntrySummary[]> {
   if (!SAFE_NAME.test(section)) return []
   const all = await loadAll()
@@ -583,10 +678,11 @@ export async function listEntries(section: string, type?: string): Promise<Entry
       development: entry.development,
       canon: entry.canon,
       order: entry.order,
+      kind: entry.kind,
       memberships: publicMemberships(entry.memberships, index),
     })
   }
-  return type === 'group' ? sortGroups(summaries) : summaries.sort(byName)
+  return type === 'group' || type === 'place' ? sortByOrder(summaries) : summaries.sort(byName)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -613,6 +709,19 @@ const PROBLEM: Record<Exclude<LinkStatus, 'ok'>, { level: 'error' | 'warn'; kind
 export function checkProblems(all: LoadedFile[]): LinkProblem[] {
   const index = indexFrom(all)
   const problems: LinkProblem[] = []
+  // place slug -> parent slug, for cycle detection
+  const parents = new Map(
+    validEntries(all).filter((e) => e.type === 'place' && e.parent).map((e) => [e.slug, e.parent!]),
+  )
+  const inCycle = (slug: string) => {
+    const seen = new Set<string>()
+    for (let at = parents.get(slug); at !== undefined; at = parents.get(at)) {
+      if (at === slug) return true
+      if (seen.has(at)) return false // a loop above this place, not through it
+      seen.add(at)
+    }
+    return false
+  }
 
   for (const { section, slug, loaded } of all) {
     const file = `seed/${section}/${slug}.md`
@@ -644,6 +753,17 @@ export function checkProblems(all: LoadedFile[]): LinkProblem[] {
         problems.push({ ...PROBLEM[target.status], file, where, slug: m.group })
       else if (target.type !== 'group') problems.push({ level: 'error', kind: 'membership target is not a group', file, where, slug: m.group })
       else if (target.status !== 'ok') problems.push({ ...PROBLEM[target.status], file, where, slug: m.group })
+    }
+    // A place's parent: must exist, be a place, and (ideally) be public. Cycles are errors.
+    if (raw.type === 'place' && raw.parent) {
+      const target = index.get(raw.parent)
+      const where = 'parent'
+      if (!target) problems.push({ level: 'error', kind: 'parent missing', file, where, slug: raw.parent })
+      else if (target.status === 'invalid' || target.status === 'ambiguous')
+        problems.push({ ...PROBLEM[target.status], file, where, slug: raw.parent })
+      else if (target.type !== 'place') problems.push({ level: 'error', kind: 'parent is not a place', file, where, slug: raw.parent })
+      else if (target.status !== 'ok') problems.push({ ...PROBLEM[target.status], file, where, slug: raw.parent })
+      if (inCycle(raw.slug)) problems.push({ level: 'error', kind: 'parent cycle', file, where, slug: raw.parent })
     }
   }
   return problems

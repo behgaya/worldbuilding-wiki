@@ -6,7 +6,7 @@ import {
   membersOf,
   parseEntry,
   publicMemberships,
-  sortGroups,
+  sortByOrder,
   type LoadedFile,
 } from '../server/utils/entries.ts'
 import { primaryGroup } from '../shared/utils/membership.ts'
@@ -93,8 +93,8 @@ describe('members', () => {
 
   it('lists current members of public characters, sorted by name, without the group file listing them', () => {
     expect(members).toEqual([
-      { slug: 'current2', name: 'Ana', title: undefined },
-      { slug: 'current', name: 'Bea', title: undefined },
+      { slug: 'current2', name: 'Ana', title: undefined, href: '/people/characters/current2' },
+      { slug: 'current', name: 'Bea', title: undefined, href: '/people/characters/current' },
     ])
   })
 
@@ -171,7 +171,7 @@ describe('npm run check: memberships', () => {
 
 describe('group order', () => {
   it('sorts by order, ties by name, groups without order last', () => {
-    const sorted = sortGroups([
+    const sorted = sortByOrder([
       { name: 'Two', order: 2 },
       { name: 'No order B' },
       { name: 'One B', order: 1 },

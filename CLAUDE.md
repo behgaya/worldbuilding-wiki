@@ -17,6 +17,7 @@ Every entry has: section, type, slug, name, parent, canon status, visibility, de
 - **Author-only data must never reach the browser.** Filter by visibility on the server, not in the page. This includes the names, counts and existence of hidden entries, sections and rows: they must not show up in lists, links, backlinks, member lists or error messages. Only the exact string `public` is served; anything else (including a typo) is hidden.
 - **Links:** `[[slug]]` or `[[slug|text]]` in section text and infobox values. Quote them in YAML (`value: "[[susie]]"`). A link is made only when the target is exactly `public` (and not retired, and its type has a page); otherwise it renders as plain text (custom text or the slug as written) with no trace of the target or its name. `npm run check` reports missing targets (error) and non-public ones (warning). Details in `docs/architecture.md`.
 - **Groups and memberships:** a group is its own entry type (`type: group`). Characters reference a group by its **slug** in `memberships` (`group: team-vulcan`), never by display name. Group member lists are derived from characters' memberships, never written in the group file. Only `current` memberships of public characters are shown publicly; `former` and `planned` never appear in any public output. A character appears once, under their first public current membership in file order. Group lists are sorted by `order`, ties by name, no `order` last; "Unaffiliated" is always last.
+- **Places:** `type: place` in `seed/places/`, with `kind` (world, landmass, nation, region, state), an optional `parent` (another place's slug) and `order`. URLs have no type segment (`/places/trovic`). Children (two levels) and the breadcrumb are derived from `parent`, never written down; only public, non-retired places appear in them, and a breadcrumb stops at the first ancestor that isn't. Region slugs are prefixed by their nation (`zhoter-north`) so slugs stay unique. No game rules on nesting.
 - **Backlinks** ("Pages that link here") come only from `[[links]]`, never memberships. A source counts only if it is public, not retired, has a page, and the link is in its intro or a public section or infobox row. Hidden sources leave no trace. One per source, no self-links, sorted by section then name. Details in `docs/architecture.md`.
 - **Canon status** is `canon`, `legend` (an in-world belief that isn't true) or `retired` (obsolete). Retired names stay as hidden aliases.
 - **Derived values are computed, not stored:** eye color, crystal, region, condition (Hybrid, Abyssal, Etherless), pole side effect.
@@ -34,9 +35,9 @@ Every entry has: section, type, slug, name, parent, canon status, visibility, de
 - Hunters are a government profession: they can kill monsters but not humans. Legal hunter teams are registered (1 to 3 members); illegal ones are **Lupins**.
 
 ## Build order
-Done: Nuxt and routing, home and section pages, seed files as Markdown, character list and page, infobox, wiki links.
-Now: group type (Team Vulcan), backlinks.
-Next: Places, then Powers (so infobox values become links), then the rest of the cast.
+Done: Nuxt and routing, home and section pages, seed files as Markdown, character list and page, infobox, wiki links, group type (Team Vulcan), backlinks.
+Now: Places (Zhoter, its regions and states, Xobbote).
+Next: Powers (so infobox values become links), then the rest of the cast.
 Later: aliases and search, Postgres and Drizzle behind the same functions, create/edit/delete forms, visibility editing, derived values and rule checks, Portuguese translation (`@nuxtjs/i18n` plus `name.pt.md` files).
 
 ## Not now

@@ -32,9 +32,9 @@ infobox:
   - title: Origin
     rows:
       - label: Hometown
-        value: Xobbote
+        value: "[[xobbote]]"
       - label: Raised in
-        value: Zhoter
+        value: "[[zhoter]]"
   - title: Relationships
     rows:
       - label: Partner
