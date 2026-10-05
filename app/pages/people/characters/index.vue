@@ -1,6 +1,8 @@
 <script setup lang="ts">
 const route = useRoute()
-const { data: characters } = await useFetch('/api/entries/people')
+const { data: characters } = await useFetch('/api/entries/people', { query: { type: 'character' } })
+// Public groups, already in display order (by `order`, then name).
+const { data: groupList } = await useFetch('/api/entries/people', { query: { type: 'group' } })
 
 type Character = NonNullable<typeof characters.value>[number]
 
@@ -17,22 +19,38 @@ const UNAFFILIATED = 'Unaffiliated'
 
 const sorted = computed(() => [...(characters.value ?? [])].sort((a, b) => byName(a.name, b.name)))
 
+interface Block {
+  key: string
+  name: string
+  href?: string
+  members: Character[]
+}
+
 const groups = computed(() => {
-  const map = new Map<string, Character[]>()
+  // Each character appears once, under their primary group (first public current membership).
+  const bySlug = new Map<string, Character[]>()
   for (const c of sorted.value) {
-    // The first current membership in the array's order decides the group, so a character
-    // with two current memberships lands somewhere predictable until groups get an order field.
-    const group = c.memberships.find((m) => m.status === 'current')?.group ?? UNAFFILIATED
-    if (!map.has(group)) map.set(group, [])
-    map.get(group)!.push(c)
+    const slug = primaryGroup(c.memberships) ?? ''
+    if (!bySlug.has(slug)) bySlug.set(slug, [])
+    bySlug.get(slug)!.push(c)
   }
-  return [...map.entries()]
-    .sort(([a], [b]) => (a === UNAFFILIATED ? 1 : b === UNAFFILIATED ? -1 : byName(a, b)))
-    .map(([name, members]) => ({ name, members }))
+  // Headings follow the group list's order and link to the group page.
+  const blocks: Block[] = []
+  for (const g of groupList.value ?? []) {
+    const members = bySlug.get(g.slug)
+    if (members) blocks.push({ key: g.slug, name: g.name, href: `/people/groups/${g.slug}`, members })
+    bySlug.delete(g.slug)
+  }
+  // No group, or a group this list doesn't know: Unaffiliated, always last.
+  const rest = [...bySlug.values()].flat().sort((a, b) => byName(a.name, b.name))
+  if (rest.length) blocks.push({ key: 'unaffiliated', name: UNAFFILIATED, members: rest })
+  return blocks
 })
 
 // What the template renders: one block per team, or a single unnamed block for A to Z.
-const blocks = computed(() => (mode.value === 'team' ? groups.value : [{ name: '', members: sorted.value }]))
+const blocks = computed<Block[]>(() =>
+  mode.value === 'team' ? groups.value : [{ key: 'all', name: '', members: sorted.value }],
+)
 
 // Placeholder portrait until images exist: first and last initials ("Zayn Alaric Wells" → "ZW").
 function initials(name: string) {
@@ -71,8 +89,11 @@ const withQuery = (key: 'group' | 'view', value: string) => ({ query: { ...route
 
     <p v-if="!sorted.length">No characters yet.</p>
 
-    <section v-for="b in blocks" v-else :key="b.name">
-      <h2 v-if="b.name">{{ b.name }}</h2>
+    <section v-for="b in blocks" v-else :key="b.key">
+      <h2 v-if="b.name">
+        <NuxtLink v-if="b.href" :to="b.href">{{ b.name }}</NuxtLink>
+        <template v-else>{{ b.name }}</template>
+      </h2>
       <ul :class="view">
         <li v-for="c in b.members" :key="c.slug">
           <NuxtLink :to="`/people/characters/${c.slug}`" class="item">

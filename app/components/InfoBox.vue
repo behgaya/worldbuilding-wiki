@@ -30,7 +30,8 @@ const visibleGroups = computed(() =>
       <dl>
         <template v-for="row in group.rows" :key="row.label">
           <dt>{{ row.label }}</dt>
-          <dd>{{ row.value }}</dd>
+          <!-- HTML rendered on the server: text escaped, [[links]] resolved, raw HTML disabled. -->
+          <dd v-html="row.value" />
         </template>
       </dl>
     </div>
