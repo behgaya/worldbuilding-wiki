@@ -104,7 +104,7 @@ watch(() => route.path, closeAll)
 
 <template>
   <nav ref="navEl">
-    <NuxtLink to="/">Worldbuilding Wiki</NuxtLink>
+    <NuxtLink to="/" class="brand">Worldbuilding Wiki</NuxtLink>
     <button
       class="theme-toggle"
       :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
@@ -151,31 +151,38 @@ watch(() => route.path, closeAll)
 </template>
 
 <style scoped>
+/* Sticks to the top while scrolling; the double rule underneath gives it a bookish edge. */
 nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
+  gap: 1.5rem;
+  padding: 0.85rem 1.5rem;
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 3px double var(--border);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.06);
 }
 
-nav > a:first-child {
+.brand {
   font-family: var(--font-heading);
-  font-size: 1.25rem;
+  font-size: 1.3rem;
+  letter-spacing: 0.04em;
   color: var(--ink);
   text-decoration: none;
-  margin-right: 1rem;
+  white-space: nowrap;
 }
 
-.section > a,
-.dropdown a {
-  text-decoration: none;
+.brand::before {
+  content: '✦';
+  margin-right: 0.5rem;
+  color: var(--accent);
+  font-size: 0.9em;
 }
 
-.section > a:hover,
-.dropdown a:hover {
-  text-decoration: underline;
+.brand:hover {
+  color: var(--accent);
 }
 
 ul {
@@ -186,62 +193,121 @@ ul {
 
 #nav-menu {
   display: flex;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .section {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
+/* Section links: small caps-style headings with an underline that grows on hover.
+   NuxtLink adds .router-link-active when you're on that section or one of its pages. */
+.section > a {
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  background: linear-gradient(var(--accent), var(--accent)) 0 100% / 0 1px no-repeat;
+  transition: background-size 0.2s, color 0.2s;
+}
+
+.section > a:hover,
+.section > a.router-link-active {
+  color: var(--accent);
+  background-size: 100% 1px;
+}
+
+/* The ▾ turns upside down while its dropdown is open. */
 .arrow {
   background: none;
   border: none;
-  padding: 0 0.25rem;
+  padding: 0 0.3rem;
   font: inherit;
-  color: inherit;
+  font-size: 0.9rem;
+  color: var(--muted);
   cursor: pointer;
+  transition: transform 0.2s, color 0.2s;
+}
+
+.arrow:hover {
+  color: var(--accent);
+}
+
+.arrow[aria-expanded='true'] {
+  transform: rotate(180deg);
+  color: var(--accent);
 }
 
 .dropdown {
   position: absolute;
-  top: 100%;
-  left: 0;
+  top: calc(100% + 0.6rem);
+  left: -0.5rem;
   z-index: 10;
-  min-width: 10rem;
-  padding: 0.5rem;
+  min-width: 11rem;
+  padding: 0.4rem;
   background: var(--surface);
   border: 1px solid var(--border);
+  border-top: 2px solid var(--accent);
   border-radius: var(--radius);
-  box-shadow: 0 4px 12px rgb(43 33 24 / 0.12);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.15);
 }
 
-.dropdown li + li {
-  margin-top: 0.25rem;
+.dropdown a {
+  display: block;
+  padding: 0.3rem 0.6rem;
+  border-radius: calc(var(--radius) - 2px);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.dropdown a:hover,
+.dropdown a.router-link-active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+.hamburger,
+.theme-toggle {
+  padding: 0.25rem 0.7rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.hamburger:hover,
+.theme-toggle:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .hamburger {
   display: none;
-  padding: 0.25rem 0.75rem;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  cursor: pointer;
 }
 
 /* Last on wide screens (after the links); beside the hamburger on narrow ones. */
 .theme-toggle {
   order: 1;
   margin-left: auto;
-  padding: 0.25rem 0.6rem;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  cursor: pointer;
 }
 
 @media (max-width: 640px) {
   nav {
     flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+  }
+
+  .brand {
+    font-size: 1.1rem;
   }
 
   .theme-toggle {
@@ -260,14 +326,24 @@ ul {
   #nav-menu.open {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.6rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .section {
+    flex-wrap: wrap;
   }
 
   .dropdown {
     position: static;
+    width: 100%;
     border: none;
+    border-left: 2px solid var(--accent);
+    border-radius: 0;
     box-shadow: none;
-    padding: 0.25rem 0 0 1rem;
+    padding: 0.25rem 0 0.25rem 0.75rem;
+    margin-top: 0.3rem;
   }
 }
 </style>

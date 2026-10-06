@@ -52,14 +52,6 @@ const blocks = computed<Block[]>(() =>
   mode.value === 'team' ? groups.value : [{ key: 'all', name: '', members: sorted.value }],
 )
 
-// Placeholder portrait until images exist: first and last initials ("Zayn Alaric Wells" → "ZW").
-function initials(name: string) {
-  const words = name.trim().split(/\s+/)
-  const first = words[0]?.[0] ?? ''
-  const last = words.length > 1 ? words[words.length - 1]![0] : ''
-  return (first + last).toUpperCase()
-}
-
 // Switch links change one setting and keep the other.
 const withQuery = (key: 'group' | 'view', value: string) => ({ query: { ...route.query, [key]: value } })
 </script>
@@ -97,7 +89,16 @@ const withQuery = (key: 'group' | 'view', value: string) => ({ query: { ...route
       <ul :class="view">
         <li v-for="c in b.members" :key="c.slug">
           <NuxtLink :to="`/people/characters/${c.slug}`" class="item">
-            <span v-if="view === 'grid'" class="portrait" aria-hidden="true">{{ initials(c.name) }}</span>
+            <!-- Bust image, or the initials when there is none (or it fails to load). -->
+            <CharacterPortrait
+              v-if="view === 'grid'"
+              class="portrait"
+              :src="c.bust"
+              :alt="c.alt ?? c.name"
+              :name="c.name"
+              fallback="initials"
+            />
+            <CharacterPortrait v-else class="thumb" :src="c.bust" :alt="c.alt ?? c.name" :name="c.name" fallback="none" />
             <span class="name">{{ c.name }}</span>
             <span v-if="c.title" class="title">{{ c.title }}</span>
             <span v-if="c.caption" class="caption">{{ c.caption }}</span>
@@ -218,6 +219,24 @@ ul.grid {
   font-family: var(--font-heading);
   font-size: 2.5rem;
   color: var(--accent);
+}
+
+/* A real bust fills the square, cropped from the top so the face stays in view. */
+img.portrait {
+  display: block;
+  object-fit: cover;
+  object-position: top center;
+}
+
+/* List view: a small round bust before the name (nothing when there's no image). */
+.thumb {
+  align-self: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  object-fit: cover;
+  object-position: top center;
 }
 
 .grid .caption {

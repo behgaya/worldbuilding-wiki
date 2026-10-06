@@ -13,11 +13,13 @@ server/utils/entries.ts          the only code that reads seed files
 server/api/entries/[section]/
   [slug].get.ts   index.get.ts   JSON for one entry / a list of summaries
                                  (characters, groups, places; ?type= picks one)
+server/api/media/[slug]/
+  [kind].get.ts                  a character's bust or full image, after the visibility check
         │
 app/pages/...                    useFetch the JSON and display it
 ```
 
-Pages never read seed files. Swapping the files for a database means changing `entries.ts` only.
+Pages never read seed files or `media/`. Swapping the files for a database means changing `entries.ts` only.
 
 ## Entry files
 
@@ -117,7 +119,41 @@ They come **only from `[[links]]`** in text and infobox values; memberships don'
 
 There is one backlink per source, however many times it links. They are sorted by section, then name.
 
+## Images
+
+Characters can have two images: a **bust** (character grid, list thumbnails, group member lists) and a **full-body** image (top of the infobox). Only characters use them for now.
+
+**Storage.** Files live in `media/<slug>/` at the project root, for example `media/zayn/bust.webp`. That is outside `public/` on purpose: anything in `public/` is served to everyone, and images must obey visibility like everything else.
+
+**Frontmatter.** The entry names its files:
+
+```yaml
+images:
+  bust: bust.webp
+  full: full.webp
+  alt: Zayn in his cape, holding his greatsword   # optional; defaults to the name
+```
+
+- `bust` and `full` are each optional. Each must be a plain filename: letters, digits and dashes, dots between them, ending in `.webp`, `.png`, `.jpg` or `.jpeg` (any case). No slashes, no leading dot, no `..`. Anything else, an unknown field (a typo like `bsut`) or a non-text `alt` makes the file invalid.
+- The block is checked on every type, but only characters use it. On other types it is ignored and `npm run check` warns.
+
+**Serving.** `GET /api/media/<slug>/<kind>`, where `kind` is `bust` or `full`. The route looks the entry up through the reader (`getMediaFile` → `resolveMedia` in `entries.ts`) and **takes the filename only from the frontmatter**, never from the URL. It answers the **same 404** for everything it won't serve: an unknown slug or kind, a slug used in two sections, an invalid, hidden (anything but exactly `public`) or retired entry, a non-character, an unset field, or a file missing on disk. The path is resolved and must stay inside `media/<slug>/`, symlinks included. The Content-Type comes from the lowercased extension, with `Cache-Control: public, max-age=300`. Nothing is resized on the server.
+
+**In the API.** A character's answer has `images: { bust, full, alt }`. `bust` and `full` are URLs (`/api/media/zayn/bust`) or `null`, never filenames. A URL is sent for every field set in the frontmatter of a non-retired character, without checking the disk. Without an images block all three are `null`. List summaries get `bust` and `alt`, and group members get `bust`.
+
+**On the page.** The grid shows the bust as a square card image, cropped from the top. The list view and group member lists show a small round thumbnail before the name. The character page shows the full image at the top of the infobox, up to 480px tall. When there's no image, or it fails to load, the grid falls back to the initials, the thumbnails show nothing, and the infobox image is left out.
+
+**Checks.** `npm run check` warns (never errors) about:
+
+- images on a non-character;
+- a field whose file isn't in `media/<slug>/`;
+- a filename that differs only in case from the file on disk (`full.png` vs `Full.png`), which works on Windows but not on Linux hosting;
+- a `media/` folder with no entry of that slug;
+- a file in `media/<slug>/` that no field references (probably a typo).
+
+It never changes or deletes files. Invalid images fields are errors, like any invalid file.
+
 ## Commands
 
-- `npm run check` lists every `[[link]]` and every membership whose target is missing (error), not a group (memberships, error) or not public (warning). For places it checks `parent`: missing → error, not a place → error, not public → warning, and a cycle (A → B → A, or a place that is its own parent) → error. It covers every entry, hidden sections and rows included, and prints the file, section or infobox row, and slug. It exits with code 1 on any error, and invalid files are errors too. It needs Node 22.18+ or 23.6+, which can run `.ts` files directly.
+- `npm run check` lists every `[[link]]` and every membership whose target is missing (error), not a group (memberships, error) or not public (warning). For places it checks `parent`: missing → error, not a place → error, not public → warning, and a cycle (A → B → A, or a place that is its own parent) → error. It covers every entry, hidden sections and rows included, and prints the file, section or infobox row, and slug. It also checks `media/` (see Images: warnings only). It exits with code 1 on any error, and invalid files are errors too. It needs Node 22.18+ or 23.6+, which can run `.ts` files directly.
 - `npm test` runs the Vitest tests in `tests/`.

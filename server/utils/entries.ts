@@ -1,5 +1,5 @@
-import { readdir, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { readdir, readFile, realpath, stat } from 'node:fs/promises'
+import { extname, join, resolve, sep } from 'node:path'
 import MarkdownIt from 'markdown-it'
 import { parse as parseYaml } from 'yaml'
 
@@ -32,6 +32,14 @@ export interface Member {
   name: string
   title?: string
   href: string
+  bust: string | null // image URL, or null when the character has no bust image
+}
+
+// A character's images as the API sends them: URLs (never filenames) or null, and the alt text.
+export interface EntryImages {
+  bust: string | null
+  full: string | null
+  alt: string | null
 }
 
 // One step of a place's breadcrumb (an ancestor place).
@@ -82,6 +90,7 @@ export interface Entry {
   members?: Member[]
   breadcrumb?: Crumb[] // nearest ancestor first
   children?: PlaceChild[]
+  images?: EntryImages // characters only
   backlinks: Backlink[]
 }
 
@@ -91,6 +100,8 @@ export type EntrySummary = Pick<
   'slug' | 'type' | 'name' | 'title' | 'caption' | 'development' | 'canon' | 'order' | 'kind'
 > & {
   memberships: Membership[]
+  bust: string | null
+  alt: string | null
 }
 
 // Section and slug come straight from the URL, so only allow simple names (blocks "../" tricks).
@@ -156,6 +167,13 @@ export interface RawEntry {
   status?: GroupStatus
   order?: number
   parent?: string // places only; never sent to the browser
+  images?: RawImages // filenames: never sent to the browser
+}
+
+export interface RawImages {
+  bust?: string
+  full?: string
+  alt?: string
 }
 
 const isOneOf = <T extends readonly string[]>(list: T, v: unknown): v is T[number] =>
@@ -243,6 +261,31 @@ function parsePlaceFields(data: Record<string, unknown>) {
   return { kind: data.kind, parent: data.parent as string | undefined, order: data.order as number | undefined }
 }
 
+// Image filenames: a plain name with an allowed extension. No slashes, no leading dot and no "..",
+// so a filename can never point outside the entry's media folder.
+const IMAGE_FILE = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.(webp|png|jpg|jpeg)$/i
+const IMAGE_KEYS = ['bust', 'full', 'alt']
+
+// The optional images block. Checked on every type (a broken field is a mistake anywhere),
+// but only characters use it.
+function parseImages(v: unknown): RawImages | undefined {
+  if (v === undefined || v === null) return undefined
+  if (typeof v !== 'object' || Array.isArray(v)) throw new InvalidEntry('images must be key: value pairs (bust, full, alt)')
+  const data = v as Record<string, unknown>
+  const unknown = Object.keys(data).find((k) => !IMAGE_KEYS.includes(k))
+  if (unknown) throw new InvalidEntry(`images has an unknown field "${unknown}" (allowed: ${IMAGE_KEYS.join(', ')})`)
+  const filename = (field: 'bust' | 'full') => {
+    const name = data[field]
+    if (name === undefined || name === null) return undefined
+    if (typeof name !== 'string' || !IMAGE_FILE.test(name))
+      throw new InvalidEntry(
+        `images.${field} must be a plain filename like ${field}.webp (webp, png, jpg or jpeg; no slashes), got ${JSON.stringify(name)}`,
+      )
+    return name
+  }
+  return { bust: filename('bust'), full: filename('full'), alt: optionalString(data.alt, 'images.alt') }
+}
+
 // Turns one seed file into a RawEntry, or throws InvalidEntry with a reason. Pure: no file access.
 export function parseEntry(text: string, section: string, slug: string): RawEntry {
   const normalised = text.replace(/^﻿/, '').replace(/\r\n?/g, '\n')
@@ -259,6 +302,7 @@ export function parseEntry(text: string, section: string, slug: string): RawEntr
   const type = optionalString(data.type, 'type') ?? ''
   const group = type === 'group' ? parseGroupFields(data) : undefined
   const place = type === 'place' ? parsePlaceFields(data) : undefined
+  const images = parseImages(data.images)
 
   if (!Array.isArray(data.memberships ?? [])) throw new InvalidEntry('memberships must be a list')
   const memberships = ((data.memberships ?? []) as unknown[]).map((m, i) => {
@@ -309,6 +353,7 @@ export function parseEntry(text: string, section: string, slug: string): RawEntr
     status: group?.status,
     order: group?.order ?? place?.order,
     parent: place?.parent,
+    images,
   }
 }
 
@@ -475,6 +520,84 @@ export function renderMarkdown(src: string, index: EntryIndex, options: { inline
 }
 
 // ---------------------------------------------------------------------------------------------
+// Images: media/<slug>/<file>, outside public/, served only by /api/media/<slug>/<kind> after the
+// same visibility check as entries. The filename always comes from the frontmatter, never the URL.
+// ---------------------------------------------------------------------------------------------
+
+const MEDIA_ROOT = () => join(process.cwd(), 'media')
+const IMAGE_KINDS = ['bust', 'full'] as const
+type ImageKind = (typeof IMAGE_KINDS)[number]
+
+const CONTENT_TYPES: Record<string, string> = {
+  webp: 'image/webp',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+}
+
+// From the lowercased extension, so Bust.PNG is image/png. null for anything else (fail closed).
+export const contentTypeFor = (filename: string): string | null =>
+  CONTENT_TYPES[extname(filename).slice(1).toLowerCase()] ?? null
+
+const mediaUrl = (slug: string, kind: ImageKind) => `/api/media/${slug}/${kind}`
+
+// The public view of an entry's images: a URL only for fields set in the frontmatter of a
+// non-retired character (the media route 404s anything else). No disk check: the page falls back.
+export function imagesFor(raw: RawEntry): EntryImages {
+  const images = raw.type === 'character' ? raw.images : undefined
+  if (!images) return { bust: null, full: null, alt: null }
+  const usable = raw.canon !== 'retired'
+  return {
+    bust: usable && images.bust ? mediaUrl(raw.slug, 'bust') : null,
+    full: usable && images.full ? mediaUrl(raw.slug, 'full') : null,
+    alt: images.alt?.trim() || raw.name,
+  }
+}
+
+// Which file the media route may serve, or null. Pure. Only a valid, public, non-retired character
+// with that exact slug and that field set gets an answer, and the answer is the frontmatter filename.
+export function resolveMedia(file: LoadedFile | undefined, kind: string, slug: string): string | null {
+  if (!SAFE_NAME.test(slug) || !IMAGE_KINDS.includes(kind as ImageKind)) return null
+  if (!file || file.slug !== slug || !file.loaded.ok) return null
+  const entry = file.loaded.entry
+  if (entry.type !== 'character' || entry.visibility !== 'public' || entry.canon === 'retired') return null
+  const filename = entry.images?.[kind as ImageKind]
+  return filename && IMAGE_FILE.test(filename) ? filename : null
+}
+
+const isInside = (dir: string, path: string) => path.startsWith(dir + sep)
+
+// The real path of root/slug/filename, or null if it is missing, not a regular file, or ends up
+// outside root/slug (through "..", or a symlink on the file or on the folder itself).
+export async function safeMediaPath(root: string, slug: string, filename: string): Promise<string | null> {
+  const rootDir = resolve(root)
+  const dir = resolve(rootDir, slug)
+  const path = resolve(dir, filename)
+  if (!isInside(rootDir, dir) || !isInside(dir, path)) return null
+  try {
+    const [realRoot, realDir, realFile] = await Promise.all([realpath(rootDir), realpath(dir), realpath(path)])
+    if (realDir !== resolve(realRoot, slug) || !isInside(realDir, realFile)) return null
+    return (await stat(realFile)).isFile() ? realFile : null
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw err
+  }
+}
+
+// For the media route: the file to stream and its type, or null (one 404 for every reason).
+export async function getMediaFile(slug: string, kind: string): Promise<{ path: string; contentType: string } | null> {
+  if (!SAFE_NAME.test(slug)) return null
+  // Slugs are global; if two sections share one, serve neither (same rule as links).
+  const matches = (await loadAll()).filter((f) => f.slug === slug)
+  if (matches.length !== 1) return null
+  const filename = resolveMedia(matches[0], kind, slug)
+  const contentType = filename && contentTypeFor(filename)
+  if (!filename || !contentType) return null
+  const path = await safeMediaPath(MEDIA_ROOT(), slug, filename)
+  return path ? { path, contentType } : null
+}
+
+// ---------------------------------------------------------------------------------------------
 // Groups and memberships. Members are derived from characters' memberships, never stored.
 // ---------------------------------------------------------------------------------------------
 
@@ -496,7 +619,13 @@ export function membersOf(groupSlug: string, all: LoadedFile[]): Member[] {
   return validEntries(all)
     .filter((e) => e.type === 'character' && e.visibility === 'public')
     .filter((e) => e.memberships.some((m) => m.group === groupSlug && m.status === 'current'))
-    .map((e) => ({ slug: e.slug, name: e.name, title: e.title, href: hrefFor(e.section, e.type, e.slug) }))
+    .map((e) => ({
+      slug: e.slug,
+      name: e.name,
+      title: e.title,
+      href: hrefFor(e.section, e.type, e.slug),
+      bust: imagesFor(e).bust,
+    }))
     .sort(byName)
 }
 
@@ -619,6 +748,7 @@ function renderEntry(raw: RawEntry, index: EntryIndex, all: LoadedFile[]): Entry
       .map((s) => ({ heading: s.heading, html: renderMarkdown(s.src, index).html, canon: s.canon })),
     backlinks: backlinksTo(raw.slug, all, index),
   }
+  if (raw.type === 'character') entry.images = imagesFor(raw)
   if (raw.type === 'group') {
     entry.kind = raw.kind
     entry.status = raw.status
@@ -658,7 +788,11 @@ export async function getEntry(section: string, slug: string): Promise<Entry | n
 // sorted by `order`; everything else by name.
 export async function listEntries(section: string, type?: string): Promise<EntrySummary[]> {
   if (!SAFE_NAME.test(section)) return []
-  const all = await loadAll()
+  return summariesFrom(await loadAll(), section, type)
+}
+
+// The list answer from already-loaded files (pure, so tests can call it).
+export function summariesFrom(all: LoadedFile[], section: string, type?: string): EntrySummary[] {
   const index = indexFrom(all)
 
   const summaries: EntrySummary[] = []
@@ -667,6 +801,7 @@ export async function listEntries(section: string, type?: string): Promise<Entry
     if (!file.loaded.ok) continue
     const entry = file.loaded.entry
     if (entry.visibility !== 'public' || (type && entry.type !== type)) continue
+    const images = imagesFor(entry)
 
     // Fields listed one by one, so nothing new slips into list responses by accident.
     summaries.push({
@@ -680,6 +815,8 @@ export async function listEntries(section: string, type?: string): Promise<Entry
       order: entry.order,
       kind: entry.kind,
       memberships: publicMemberships(entry.memberships, index),
+      bust: images.bust,
+      alt: images.alt,
     })
   }
   return type === 'group' || type === 'place' ? sortByOrder(summaries) : summaries.sort(byName)
@@ -694,7 +831,8 @@ export interface LinkProblem {
   kind: string
   file: string
   where: string
-  slug: string
+  slug: string // a link target; for media problems a filename or folder (then plain is true)
+  plain?: true // print `slug` as is, not as [[slug]]
 }
 
 const PROBLEM: Record<Exclude<LinkStatus, 'ok'>, { level: 'error' | 'warn'; kind: string }> = {
@@ -769,6 +907,70 @@ export function checkProblems(all: LoadedFile[]): LinkProblem[] {
   return problems
 }
 
+// Media checks, pure: `listing` maps each folder in media/ to the files in it. Warnings only:
+// an images field on a non-character, a field whose file is missing (or differs only in case,
+// which works on Windows but not on Linux), a folder with no entry, and a file nothing references.
+export function checkMedia(all: LoadedFile[], listing: Map<string, string[]>): LinkProblem[] {
+  const problems: LinkProblem[] = []
+  const warn = (kind: string, file: string, where: string, slug: string) =>
+    problems.push({ level: 'warn', kind, file, where, slug, plain: true })
+  const referenced = new Map<string, Set<string>>() // folder -> files on disk a field points to
+
+  for (const { section, slug, loaded } of all) {
+    if (!loaded.ok || !loaded.entry.images) continue
+    const file = `seed/${section}/${slug}.md`
+    const images = loaded.entry.images
+    if (loaded.entry.type !== 'character') {
+      const fields = IMAGE_KINDS.filter((k) => images[k]).join(', ')
+      warn('images on a non-character (not served)', file, 'images', fields || 'alt')
+    }
+    const onDisk = listing.get(slug) ?? []
+    for (const kind of IMAGE_KINDS) {
+      const name = images[kind]
+      if (!name) continue
+      const exact = onDisk.find((f) => f === name)
+      const caseOnly = exact ? undefined : onDisk.find((f) => f.toLowerCase() === name.toLowerCase())
+      if (caseOnly) warn(`filename case differs (on disk: ${caseOnly})`, file, `images.${kind}`, name)
+      else if (!exact) warn(`image file missing in media/${slug}/`, file, `images.${kind}`, name)
+      const found = exact ?? caseOnly
+      if (found) referenced.set(slug, (referenced.get(slug) ?? new Set()).add(found))
+    }
+  }
+
+  const slugs = new Set(all.map((f) => f.slug))
+  for (const [folder, files] of listing) {
+    if (!slugs.has(folder)) {
+      warn('media folder with no matching entry', `media/${folder}/`, '-', folder)
+      continue
+    }
+    for (const name of files) {
+      if (!referenced.get(folder)?.has(name)) warn('media file not referenced by any images field', `media/${folder}/${name}`, '-', name)
+    }
+  }
+  return problems
+}
+
+// media/ as folder -> file names (files only). Missing media/ is an empty listing.
+async function mediaListing(): Promise<Map<string, string[]>> {
+  const listing = new Map<string, string[]>()
+  for (const folder of await readdirTyped(MEDIA_ROOT())) {
+    if (!folder.isDirectory()) continue
+    const files = await readdirTyped(join(MEDIA_ROOT(), folder.name))
+    listing.set(folder.name, files.filter((f) => f.isFile()).map((f) => f.name))
+  }
+  return listing
+}
+
+async function readdirTyped(dir: string) {
+  try {
+    return await readdir(dir, { withFileTypes: true })
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return []
+    throw err
+  }
+}
+
 export async function checkLinks(): Promise<LinkProblem[]> {
-  return checkProblems(await loadAll())
+  const all = await loadAll()
+  return [...checkProblems(all), ...checkMedia(all, await mediaListing())]
 }

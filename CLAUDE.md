@@ -14,6 +14,7 @@ Every entry has: section, type, slug, name, parent, canon status, visibility, de
 
 ## Rules to follow
 - **Data access goes through a few server functions** (`getEntry`, `listEntries`, and the backlink and member helpers they call). Pages never read seed files or the database directly, so I can swap the storage later. API answers are built from named fields only, never by spreading a whole object.
+- **Images** live in `media/`, never in `public/`, and are served only through `/api/media` after the visibility check.
 - **Author-only data must never reach the browser.** Filter by visibility on the server, not in the page. This includes the names, counts and existence of hidden entries, sections and rows: they must not show up in lists, links, backlinks, member lists or error messages. Only the exact string `public` is served; anything else (including a typo) is hidden.
 - **Links:** `[[slug]]` or `[[slug|text]]` in section text and infobox values. Quote them in YAML (`value: "[[susie]]"`). A link is made only when the target is exactly `public` (and not retired, and its type has a page); otherwise it renders as plain text (custom text or the slug as written) with no trace of the target or its name. `npm run check` reports missing targets (error) and non-public ones (warning). Details in `docs/architecture.md`.
 - **Groups and memberships:** a group is its own entry type (`type: group`). Characters reference a group by its **slug** in `memberships` (`group: team-vulcan`), never by display name. Group member lists are derived from characters' memberships, never written in the group file. Only `current` memberships of public characters are shown publicly; `former` and `planned` never appear in any public output. A character appears once, under their first public current membership in file order. Group lists are sorted by `order`, ties by name, no `order` last; "Unaffiliated" is always last.
@@ -41,4 +42,4 @@ Next: Powers (so infobox values become links), then the rest of the cast.
 Later: aliases and search, Postgres and Drizzle behind the same functions, create/edit/delete forms, visibility editing, derived values and rule checks, Portuguese translation (`@nuxtjs/i18n` plus `name.pt.md` files).
 
 ## Not now
-Clickable map, images, accounts, hosting, importing old notes, alchemy details, the rule checker, side effects for six Chaos poles, translation, typed relations (partner/rival with notes per side).
+Clickable map, gallery, image uploads, accounts, hosting, importing old notes, alchemy details, the rule checker, side effects for six Chaos poles, translation, typed relations (partner/rival with notes per side).

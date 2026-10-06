@@ -93,8 +93,8 @@ describe('members', () => {
 
   it('lists current members of public characters, sorted by name, without the group file listing them', () => {
     expect(members).toEqual([
-      { slug: 'current2', name: 'Ana', title: undefined, href: '/people/characters/current2' },
-      { slug: 'current', name: 'Bea', title: undefined, href: '/people/characters/current' },
+      { slug: 'current2', name: 'Ana', title: undefined, href: '/people/characters/current2', bust: null },
+      { slug: 'current', name: 'Bea', title: undefined, href: '/people/characters/current', bust: null },
     ])
   })
 

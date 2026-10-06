@@ -7,6 +7,10 @@ caption: Team Vulcan
 canon: canon
 visibility: public
 development: partial
+images:
+  bust: bust.webp
+  full: full.webp
+  alt: Zayn in his cape, holding his greatsword
 memberships:
   - group: team-vulcan
     status: current

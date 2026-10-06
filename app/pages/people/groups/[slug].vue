@@ -20,38 +20,24 @@ useHead({ title: () => group.value?.name ?? 'Entry not found' })
         <p v-if="group.caption" class="caption">{{ group.caption }}</p>
       </header>
 
-      <div class="layout">
-        <InfoBox class="infobox" :title="group.name" :groups="group.infobox" />
-        <div class="sections">
-          <!-- Intro and sections are HTML rendered on the server with raw HTML disabled. -->
-          <div v-if="group.intro" class="intro" v-html="group.intro" />
-
-          <!-- Members are derived on the server from characters' current memberships. -->
+      <EntryBody :entry="group">
+        <!-- Members are derived on the server from characters' current memberships. -->
+        <template #after-intro>
           <section v-if="group.members?.length" class="members">
             <h2>Members</h2>
             <ul>
               <li v-for="m in group.members" :key="m.slug">
+                <CharacterPortrait class="thumb" :src="m.bust" :alt="m.name" :name="m.name" fallback="none" />
                 <NuxtLink :to="m.href">{{ m.name }}</NuxtLink>
                 <span v-if="m.title" class="member-title">{{ m.title }}</span>
               </li>
             </ul>
           </section>
-
-          <WikiSection v-for="s in group.sections" :key="s.heading" :heading="s.heading" :html="s.html" />
-          <Backlinks :items="group.backlinks" />
-        </div>
-      </div>
+        </template>
+      </EntryBody>
     </article>
 
-    <template v-else-if="notFound">
-      <h1>Entry not found</h1>
-      <p>No group with the slug "{{ route.params.slug }}".</p>
-    </template>
-
-    <template v-else>
-      <h1>Couldn't load this entry</h1>
-      <p>Something went wrong. Try reloading the page.</p>
-    </template>
+    <EntryMissing v-else :not-found="!!notFound" kind="group" />
   </main>
 </template>
 
@@ -80,37 +66,6 @@ header p {
   color: var(--muted);
 }
 
-.layout {
-  display: grid;
-  gap: 1.5rem;
-  margin-top: 1.5rem;
-}
-
-/* Same layout as the character page: infobox on the right when there is one. */
-@media (min-width: 768px) {
-  .layout:has(.infobox) {
-    grid-template-columns: 1fr 18rem;
-    grid-template-areas: 'sections infobox';
-    align-items: start;
-  }
-
-  .layout:has(.infobox) .infobox {
-    grid-area: infobox;
-  }
-
-  .layout:has(.infobox) .sections {
-    grid-area: sections;
-  }
-}
-
-.intro {
-  font-size: 1.15rem;
-}
-
-.intro :deep(p:first-child) {
-  margin-top: 0;
-}
-
 .members h2 {
   padding-bottom: 0.25rem;
   border-bottom: 1px solid var(--border);
@@ -118,6 +73,18 @@ header p {
 
 .members ul {
   padding-left: 1.25rem;
+}
+
+/* A small round bust before the name (nothing when there's no image). */
+.thumb {
+  vertical-align: middle;
+  margin-right: 0.5rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  object-fit: cover;
+  object-position: top center;
 }
 
 .member-title {

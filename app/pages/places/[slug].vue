@@ -29,27 +29,14 @@ useHead({ title: () => place.value?.name ?? 'Entry not found' })
         <p v-if="place.caption" class="caption">{{ place.caption }}</p>
       </header>
 
-      <div class="layout">
-        <InfoBox class="infobox" :title="place.name" :groups="place.infobox" />
-        <div class="sections">
-          <!-- Intro and sections are HTML rendered on the server with raw HTML disabled. -->
-          <div v-if="place.intro" class="intro" v-html="place.intro" />
-          <WikiSection v-for="s in place.sections" :key="s.heading" :heading="s.heading" :html="s.html" />
+      <EntryBody :entry="place">
+        <template #after-sections>
           <PlaceChildren :items="place.children ?? []" />
-          <Backlinks :items="place.backlinks" />
-        </div>
-      </div>
+        </template>
+      </EntryBody>
     </article>
 
-    <template v-else-if="notFound">
-      <h1>Entry not found</h1>
-      <p>No place with the slug "{{ route.params.slug }}".</p>
-    </template>
-
-    <template v-else>
-      <h1>Couldn't load this entry</h1>
-      <p>Something went wrong. Try reloading the page.</p>
-    </template>
+    <EntryMissing v-else :not-found="!!notFound" kind="place" />
   </main>
 </template>
 
@@ -76,36 +63,5 @@ header p {
 .caption {
   font-style: italic;
   color: var(--muted);
-}
-
-.layout {
-  display: grid;
-  gap: 1.5rem;
-  margin-top: 1.5rem;
-}
-
-/* Same layout as the character page: infobox on the right when there is one. */
-@media (min-width: 768px) {
-  .layout:has(.infobox) {
-    grid-template-columns: 1fr 18rem;
-    grid-template-areas: 'sections infobox';
-    align-items: start;
-  }
-
-  .layout:has(.infobox) .infobox {
-    grid-area: infobox;
-  }
-
-  .layout:has(.infobox) .sections {
-    grid-area: sections;
-  }
-}
-
-.intro {
-  font-size: 1.15rem;
-}
-
-.intro :deep(p:first-child) {
-  margin-top: 0;
 }
 </style>

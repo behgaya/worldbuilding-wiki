@@ -70,26 +70,10 @@ onBeforeUnmount(() => clearTimeout(resetTimer))
         </span>
       </header>
 
-      <div class="layout">
-        <InfoBox class="infobox" :title="character.name" :groups="character.infobox" />
-        <div class="sections">
-          <!-- Intro and sections are HTML rendered on the server with raw HTML disabled. -->
-          <div v-if="character.intro" class="intro" v-html="character.intro" />
-          <WikiSection v-for="s in character.sections" :key="s.heading" :heading="s.heading" :html="s.html" />
-          <Backlinks :items="character.backlinks" />
-        </div>
-      </div>
+      <EntryBody :entry="character" />
     </article>
 
-    <template v-else-if="notFound">
-      <h1>Entry not found</h1>
-      <p>No character with the slug "{{ route.params.slug }}".</p>
-    </template>
-
-    <template v-else>
-      <h1>Couldn't load this entry</h1>
-      <p>Something went wrong. Try reloading the page.</p>
-    </template>
+    <EntryMissing v-else :not-found="!!notFound" kind="character" />
   </main>
 </template>
 
@@ -148,40 +132,8 @@ header p {
   color: var(--muted);
 }
 
-.layout {
-  display: grid;
-  gap: 1.5rem;
-  margin-top: 1.5rem;
-}
-
-/* Infobox comes first in the markup (read first on mobile), shown on the right on wide screens.
-   Only split into two columns when an infobox was actually rendered. */
-@media (min-width: 768px) {
-  .layout:has(.infobox) {
-    grid-template-columns: 1fr 18rem;
-    grid-template-areas: 'sections infobox';
-    align-items: start;
-  }
-
-  .layout:has(.infobox) .infobox {
-    grid-area: infobox;
-  }
-
-  /* Guarded too: a grid-area naming an area that isn't defined adds an extra implicit column. */
-  .layout:has(.infobox) .sections {
-    grid-area: sections;
-  }
-}
-
-.intro {
-  font-size: 1.15rem;
-}
-
-.intro :deep(p:first-child) {
-  margin-top: 0;
-}
-
-.sections :deep(h2):first-child {
+/* The section headings sit inside EntryBody, so reach in with :deep from the article. */
+article :deep(.sections h2:first-child) {
   margin-top: 0;
 }
 </style>

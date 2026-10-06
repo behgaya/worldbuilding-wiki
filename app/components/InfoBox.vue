@@ -12,7 +12,18 @@ interface InfoGroup {
 const props = defineProps<{
   title: string
   groups: InfoGroup[]
+  image?: { src: string; alt: string } | null // full-body image at the top of the box
 }>()
+
+// Hidden if the image fails to load. It is in the server-rendered HTML, so it can fail before
+// Vue attaches @error: check once after mount too.
+const imageFailed = ref(false)
+const imgEl = ref<HTMLImageElement | null>(null)
+onMounted(() => {
+  if (imgEl.value?.complete && !imgEl.value.naturalWidth) imageFailed.value = true
+})
+watch(() => props.image?.src, () => (imageFailed.value = false))
+const showImage = computed(() => !!props.image?.src && !imageFailed.value)
 
 // Hide rows with no value, and groups that end up empty.
 const visibleGroups = computed(() =>
@@ -23,8 +34,16 @@ const visibleGroups = computed(() =>
 </script>
 
 <template>
-  <aside v-if="visibleGroups.length" class="infobox" :aria-label="title">
+  <aside v-if="visibleGroups.length || showImage" class="infobox" :aria-label="title">
     <p class="infobox-title">{{ title }}</p>
+    <img
+      v-if="showImage"
+      ref="imgEl"
+      class="infobox-image"
+      :src="image!.src"
+      :alt="image!.alt"
+      @error="imageFailed = true"
+    />
     <div v-for="group in visibleGroups" :key="group.title">
       <h3>{{ group.title }}</h3>
       <dl>
@@ -52,6 +71,16 @@ const visibleGroups = computed(() =>
   font-family: var(--font-heading);
   font-size: 1.25rem;
   text-align: center;
+}
+
+/* Scaled to the box width, never taller than 480px; the whole figure stays visible. */
+.infobox-image {
+  display: block;
+  width: 100%;
+  max-height: 480px;
+  object-fit: contain;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
 }
 
 h3 {
