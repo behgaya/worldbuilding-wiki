@@ -1,12 +1,15 @@
 ---
 type: character
-slug: sokah
-name: Sokah
+slug: adriano
+name: Adriano
+caption: Team Delta
 canon: canon
 visibility: public
 development: stub
 memberships:
-  - group: team-neo
+  - group: team-delta
     status: current
     order: 2
 ---
+
+A member of [[team-delta]].

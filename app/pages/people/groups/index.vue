@@ -13,7 +13,8 @@ useHead({ title: 'Groups' })
 
     <ul v-else class="cards">
       <li v-for="g in groups" :key="g.slug">
-        <NuxtLink :to="`/people/groups/${g.slug}`" class="card">
+        <!-- Team color: a CSS variable (validated hex) for the card border only. -->
+        <NuxtLink :to="`/people/groups/${g.slug}`" class="card team" :style="teamStyle(g.color)">
           <span class="name">{{ g.name }}</span>
           <span v-if="g.caption" class="caption">{{ g.caption }}</span>
         </NuxtLink>
@@ -45,7 +46,7 @@ main {
   height: 100%;
   padding: 1rem;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 2px solid var(--team-shade, var(--border)); /* the team's color, neutral without one */
   border-radius: var(--radius);
   color: var(--ink);
   text-decoration: none;
@@ -54,7 +55,7 @@ main {
 
 .card:hover,
 .card:focus-visible {
-  border-color: var(--accent);
+  border-color: var(--team-shade, var(--accent));
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgb(43 33 24 / 0.12);
 }

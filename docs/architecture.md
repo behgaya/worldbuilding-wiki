@@ -66,7 +66,7 @@ A group is its own entry type, `type: group`, for example `seed/people/team-vulc
 | Field | Values |
 | --- | --- |
 | `kind` | `hunter-team`, `guild`, `cult`, `npc-group` |
-| `status` | `registered`, `lupin`, `unregistered`, `disbanded` |
+| `status` | `registered`, `lupin`, `unregistered`, `disbanded`. Required for `hunter-team`; optional for `guild`, `cult` and `npc-group`. When present it must still be one of these values; when absent, nothing is shown for it anywhere. |
 | `order` | optional whole number: order of appearance |
 
 Any other value makes the file invalid. There are no game rules such as team size yet, and no sub-groups (`parent`). Group pages live at `/people/groups` (the list) and `/people/groups/<slug>`.
@@ -75,10 +75,11 @@ Any other value makes the file invalid. There are no game rules such as team siz
 
 ```yaml
 memberships:
-  - { group: team-vulcan, status: current }   # current | former | planned
+  - { group: team-vulcan, status: current, order: 1 }   # current | former | planned; order optional
 ```
 
-- A group's member list shows **public characters with a `current` membership** to it, sorted by name, with name and title.
+- A group's member list shows **public characters with a `current` membership** to it, with name and title.
+- **Order within a group:** a membership can have an optional whole-number `order` (for example the leader `1`, the second in command `2`). Members are sorted by it, lowest first, ties by name, and members without one come after, by name. It is per membership, so a character in two groups can have a different place in each. The same order is used on the group page and under the team's heading in the character list. Unaffiliated characters and the A to Z view stay alphabetical.
 - `former` and `planned` memberships never leave the server: not in lists, pages or the API.
 - A membership to a hidden or missing group is dropped from all public output, so the character shows as "Unaffiliated". It is never shown as plain text either, because that would reveal that the group exists. `npm run check` reports it: a missing group or a non-group target is an error, and a hidden group is a warning.
 - **Primary group:** where a character has more than one current membership, they appear **once** in the character list, under their **first** public current membership in file order. Their caption links to the same group (`primaryGroup` in `shared/utils/membership.ts`).
@@ -86,6 +87,39 @@ memberships:
 **Order:** group lists are sorted by `order` (ascending), ties by name, and groups without an `order` come last. On the character list, team headings follow that order and "Unaffiliated" is always last.
 
 The list endpoint takes `?type=character`, `?type=group` or `?type=place` (the types in `TYPE_PATHS`). Any other value answers 400.
+
+## Team colors
+
+A group can have an optional team color, a **display accent only**. It is drawn as thin lines and shapes (borders, rings, bars, list markers), never as text or fills. It is never tied to element, eye, pole or region colors, and no rule uses it.
+
+```yaml
+color: "#e8873a"
+```
+
+- **Groups only.** On any other type the field is ignored, and `npm run check` warns.
+- **Validation:** it must be a quoted `#` followed by exactly 6 hex digits, and it is stored lowercased. Anything else (`#fff`, `orange`, `#e8873a00`, `"#fff; background: red"`) makes the file invalid.
+- **Quote it.** Unquoted, YAML reads `#` as the start of a comment, so `color: #e8873a` arrives empty. That also makes the file invalid, with the reason `color must be quoted, like "#e8873a"`.
+
+**Inheritance.** A character's `teamColor` is the color of their **primary group**: the first public current membership, the same rule as the character list. It is computed on the server from the already filtered memberships, so a hidden, missing or retired group gives `null`. Characters never store a color.
+
+**In the API**, as named fields:
+
+- Group answers and group summaries: `color`, or `null` (also `null` for a retired group).
+- Character answers and character summaries: `teamColor`, or `null`.
+- Member items carry no color, because the group page uses the group's own.
+
+**On the page:** an element gets `class="team"` and `:style="teamStyle(hex)"`. `teamStyle` (in `shared/utils/color.ts`) only ever outputs `--team: <validated hex>`. `main.css` then defines `--team-shade`:
+
+- **Dark theme:** the color as written.
+- **Light theme:** `color-mix(in srgb, var(--team) 65%, black)`, darkened so thin lines keep their contrast on the parchment background.
+
+Every use is `var(--team-shade, <fallback>)`. The fallback is gold (`--accent`) for header lines, heading bars, rings, initials and member markers. It is the neutral `--border` for grid card borders, and nothing (the existing divider) for the infobox title line, so places look unchanged.
+
+**Checks** (`npm run check`, warnings only):
+
+- a color on a non-group;
+- two public groups with the same color (both files named);
+- low contrast: the color as drawn in each theme (as written on dark, the 65% mix on light) has less than **3:1** against that theme's `--bg` or `--surface`. 3:1 is the bar for non-text elements such as lines. The theme backgrounds are constants in `shared/utils/color.ts`, and a test checks that they still match `main.css`.
 
 ## Places
 
@@ -155,5 +189,5 @@ It never changes or deletes files. Invalid images fields are errors, like any in
 
 ## Commands
 
-- `npm run check` lists every `[[link]]` and every membership whose target is missing (error), not a group (memberships, error) or not public (warning). For places it checks `parent`: missing → error, not a place → error, not public → warning, and a cycle (A → B → A, or a place that is its own parent) → error. It covers every entry, hidden sections and rows included, and prints the file, section or infobox row, and slug. It also checks `media/` (see Images: warnings only). It exits with code 1 on any error, and invalid files are errors too. It needs Node 22.18+ or 23.6+, which can run `.ts` files directly.
+- `npm run check` lists every `[[link]]` and every membership whose target is missing (error), not a group (memberships, error) or not public (warning). For places it checks `parent`: missing → error, not a place → error, not public → warning, and a cycle (A → B → A, or a place that is its own parent) → error. It covers every entry, hidden sections and rows included, and prints the file, section or infobox row, and slug. It also checks `media/` and team colors (see Images and Team colors: warnings only). It exits with code 1 on any error, and invalid files are errors too. It needs Node 22.18+ or 23.6+, which can run `.ts` files directly.
 - `npm test` runs the Vitest tests in `tests/`.

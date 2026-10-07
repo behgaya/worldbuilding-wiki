@@ -1,12 +1,15 @@
 ---
 type: character
-slug: yel
-name: Yel
+slug: leslie
+name: Leslie
+caption: Team Delta
 canon: canon
 visibility: public
 development: stub
 memberships:
-  - group: team-neo
+  - group: team-delta
     status: current
     order: 3
 ---
+
+A member of [[team-delta]].

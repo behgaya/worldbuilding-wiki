@@ -1,12 +1,15 @@
 ---
 type: character
-slug: jonathan
-name: Jonathan
+slug: diana
+name: Diana
+caption: Team Shadow
 canon: canon
 visibility: public
 development: stub
 memberships:
-  - group: team-delta
+  - group: team-shadow
     status: current
     order: 1
 ---
+
+A member of [[team-shadow]].

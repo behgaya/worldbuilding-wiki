@@ -13,7 +13,8 @@ useHead({ title: () => group.value?.name ?? 'Entry not found' })
 
 <template>
   <main>
-    <article v-if="group">
+    <!-- Team color: a CSS variable (validated hex) for thin lines only; text keeps its colors. -->
+    <article v-if="group" class="team" :style="teamStyle(group.color)">
       <header>
         <h1>{{ group.name }}</h1>
         <p v-if="group.title" class="title">{{ group.title }}</p>
@@ -52,6 +53,12 @@ header h1 {
   margin-bottom: 0.25rem;
 }
 
+/* A thin bar under the team name, in the team's color (gold without one). */
+header {
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid var(--team-shade, var(--accent));
+}
+
 header p {
   margin: 0;
 }
@@ -75,6 +82,11 @@ header p {
   padding-left: 1.25rem;
 }
 
+/* List bullets in the team's color. */
+.members li::marker {
+  color: var(--team-shade, var(--accent));
+}
+
 /* A small round bust before the name (nothing when there's no image). */
 .thumb {
   vertical-align: middle;
@@ -82,7 +94,7 @@ header p {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  border: 1px solid var(--border);
+  border: 2px solid var(--team-shade, var(--accent));
   object-fit: cover;
   object-position: top center;
 }

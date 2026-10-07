@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   checkProblems,
+  entryFrom,
   indexFrom,
   isKnownType,
   membersOf,
@@ -65,6 +66,36 @@ describe('group validation', () => {
     expect(() => parseEntry(text, 'people', 'team-a')).toThrow(/status must be one of/)
   })
 
+  // A group of another kind, with the status line replaced (or removed when status is undefined).
+  const ofKind = (kind: string, status?: string) =>
+    group('team-a')
+      .replace('kind: hunter-team', `kind: ${kind}`)
+      .replace('status: registered\n', status === undefined ? '' : `status: ${status}\n`)
+
+  it('requires a status for a hunter team', () => {
+    expect(() => parseEntry(ofKind('hunter-team'), 'people', 'team-a')).toThrow(/status must be one of .* for a hunter team/)
+  })
+
+  it('lets guilds, cults and NPC groups leave status out, and shows none', () => {
+    for (const kind of ['guild', 'cult', 'npc-group']) {
+      const all = load({ 'team-a': ofKind(kind) })
+      expect(all[0]!.loaded.ok).toBe(true)
+      const entry = entryFrom(all, 'people', 'team-a')!
+      expect(entry.status).toBeUndefined()
+      expect(JSON.stringify(entry)).not.toContain('"status"')
+    }
+  })
+
+  it('still accepts a valid status on other kinds', () => {
+    expect(parseEntry(ofKind('cult', 'registered'), 'people', 'team-a').status).toBe('registered')
+  })
+
+  it('rejects a bad status on any kind', () => {
+    for (const kind of ['hunter-team', 'guild', 'cult', 'npc-group']) {
+      expect(() => parseEntry(ofKind(kind, 'legal'), 'people', 'team-a')).toThrow(/status must be one of/)
+    }
+  })
+
   it('rejects an order that is not a whole number', () => {
     expect(() => parseEntry(group('team-a', ['order: 1.5']), 'people', 'team-a')).toThrow(/order must be a whole number/)
     expect(() => parseEntry(group('team-a', ['order: "1"']), 'people', 'team-a')).toThrow(/order must be a whole number/)
@@ -103,6 +134,42 @@ describe('members', () => {
     expect(names).not.toContain('Fay')
     expect(names).not.toContain('Pia')
     expect(names).not.toContain('Hidden Person')
+  })
+})
+
+describe('member order within a group', () => {
+  const all = load({
+    'team-a': group('team-a'),
+    'team-b': group('team-b'),
+    zed: character('zed', 'Zed', ['{ group: team-a, status: current, order: 1 }']),
+    eli: character('eli', 'Eli', ['{ group: team-a, status: current, order: 2 }']),
+    amy: character('amy', 'Amy', ['{ group: team-a, status: current, order: 3 }']),
+    bo: character('bo', 'Bo', ['{ group: team-a, status: current }']),
+    al: character('al', 'Al', ['{ group: team-a, status: current }']),
+    // Their order belongs to team-b only; in team-a they have none.
+    cy: character('cy', 'Cy', ['{ group: team-b, status: current, order: 1 }', '{ group: team-a, status: current }']),
+  })
+
+  it('puts ordered members first (lowest first), then the rest by name', () => {
+    expect(membersOf('team-a', all).map((m) => m.name)).toEqual(['Zed', 'Eli', 'Amy', 'Al', 'Bo', 'Cy'])
+  })
+
+  it('uses the order of the membership to that group', () => {
+    expect(membersOf('team-b', all).map((m) => m.name)).toEqual(['Cy'])
+  })
+
+  it('sends the order with public memberships', () => {
+    const zed = all.find((f) => f.slug === 'zed')!
+    expect(zed.loaded.ok && publicMemberships(zed.loaded.entry.memberships, indexFrom(all))).toEqual([
+      { group: 'team-a', status: 'current', order: 1 },
+    ])
+  })
+
+  it('rejects an order that is not a whole number', () => {
+    for (const bad of ['1.5', '"1"', 'first']) {
+      const text = character('zed', 'Zed', [`{ group: team-a, status: current, order: ${bad} }`])
+      expect(() => parseEntry(text, 'people', 'zed')).toThrow(/memberships\[0\] order must be a whole number/)
+    }
   })
 })
 

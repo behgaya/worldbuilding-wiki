@@ -2,6 +2,8 @@ import { readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { extname, join, resolve, sep } from 'node:path'
 import MarkdownIt from 'markdown-it'
 import { parse as parseYaml } from 'yaml'
+import { isHexColor, themeContrast, effectiveColors } from '../../shared/utils/color.ts'
+import { primaryGroup } from '../../shared/utils/membership.ts'
 
 const CANON = ['canon', 'legend', 'retired'] as const
 const VISIBILITY = ['public', 'scholars', 'author'] as const
@@ -20,6 +22,7 @@ type PlaceKind = (typeof PLACE_KINDS)[number]
 export interface Membership {
   group: string // the group's slug, e.g. "team-vulcan"
   status: (typeof MEMBERSHIP_STATUS)[number]
+  order?: number // optional whole number: position within that group (leader first), lower first
 }
 
 export interface InfoRow {
@@ -91,6 +94,8 @@ export interface Entry {
   breadcrumb?: Crumb[] // nearest ancestor first
   children?: PlaceChild[]
   images?: EntryImages // characters only
+  color?: string | null // groups only: the team color, a display accent
+  teamColor?: string | null // characters only: their primary group's color
   backlinks: Backlink[]
 }
 
@@ -102,6 +107,8 @@ export type EntrySummary = Pick<
   memberships: Membership[]
   bust: string | null
   alt: string | null
+  color: string | null // groups: their team color; null otherwise
+  teamColor: string | null // characters: their primary group's color; null otherwise
 }
 
 // Section and slug come straight from the URL, so only allow simple names (blocks "../" tricks).
@@ -168,6 +175,8 @@ export interface RawEntry {
   order?: number
   parent?: string // places only; never sent to the browser
   images?: RawImages // filenames: never sent to the browser
+  color?: string // groups only, validated and lowercased
+  ignoredColor?: string // a color field on a non-group: ignored, reported by npm run check
 }
 
 export interface RawImages {
@@ -242,13 +251,29 @@ function splitSections(body: string) {
   return { intro: intro.join('\n').trim(), sections }
 }
 
-// Group-only fields. Called only for type: group.
+// Group-only fields. Called only for type: group. `status` is required for hunter teams only;
+// guilds, cults and NPC groups may leave it out, but a status that is given must still be valid.
 function parseGroupFields(data: Record<string, unknown>) {
   if (!isOneOf(GROUP_KINDS, data.kind)) throw new InvalidEntry(`kind must be one of ${GROUP_KINDS.join(', ')}`)
-  if (!isOneOf(GROUP_STATUS, data.status)) throw new InvalidEntry(`status must be one of ${GROUP_STATUS.join(', ')}`)
+  const hasStatus = data.status !== undefined && data.status !== null
+  if (data.kind === 'hunter-team' && !hasStatus)
+    throw new InvalidEntry(`status must be one of ${GROUP_STATUS.join(', ')} for a hunter team`)
+  if (hasStatus && !isOneOf(GROUP_STATUS, data.status))
+    throw new InvalidEntry(`status must be one of ${GROUP_STATUS.join(', ')}`)
   if (data.order !== undefined && !Number.isInteger(data.order))
     throw new InvalidEntry(`order must be a whole number, got ${JSON.stringify(data.order)}`)
-  return { kind: data.kind, status: data.status, order: data.order as number | undefined }
+  const status = hasStatus ? (data.status as GroupStatus) : undefined
+  return { kind: data.kind, status, order: data.order as number | undefined, color: parseColor(data) }
+}
+
+// A group's optional team color: a quoted "#rrggbb", stored lowercased. A display accent only.
+function parseColor(data: Record<string, unknown>): string | undefined {
+  if (!('color' in data)) return undefined
+  const v = data.color
+  // Unquoted, YAML reads "color: #e8873a" as a comment, so the value arrives empty.
+  if (v === null || v === undefined || v === '') throw new InvalidEntry('color must be quoted, like "#e8873a"')
+  if (!isHexColor(v)) throw new InvalidEntry(`color must be "#" and 6 hex digits, like "#e8873a", got ${JSON.stringify(v)}`)
+  return v.toLowerCase()
 }
 
 // Place-only fields. Called only for type: place. No game rules (a state may sit anywhere).
@@ -306,12 +331,14 @@ export function parseEntry(text: string, section: string, slug: string): RawEntr
 
   if (!Array.isArray(data.memberships ?? [])) throw new InvalidEntry('memberships must be a list')
   const memberships = ((data.memberships ?? []) as unknown[]).map((m, i) => {
-    const { group, status } = (m ?? {}) as Record<string, unknown>
+    const { group, status, order } = (m ?? {}) as Record<string, unknown>
     if (typeof group !== 'string' || !SAFE_NAME.test(group))
       throw new InvalidEntry(`memberships[${i}] group must be a group slug like team-vulcan, got ${JSON.stringify(group)}`)
     if (!isOneOf(MEMBERSHIP_STATUS, status))
       throw new InvalidEntry(`memberships[${i}] status must be one of ${MEMBERSHIP_STATUS.join(', ')}`)
-    return { group, status }
+    if (order !== undefined && !Number.isInteger(order))
+      throw new InvalidEntry(`memberships[${i}] order must be a whole number, got ${JSON.stringify(order)}`)
+    return { group, status, order: order as number | undefined }
   })
 
   if (!Array.isArray(data.infobox ?? [])) throw new InvalidEntry('infobox must be a list')
@@ -354,6 +381,9 @@ export function parseEntry(text: string, section: string, slug: string): RawEntr
     order: group?.order ?? place?.order,
     parent: place?.parent,
     images,
+    color: group?.color,
+    // A color on any other type is ignored; kept only so npm run check can warn about it.
+    ignoredColor: type !== 'group' && 'color' in data ? String(data.color ?? '') : undefined,
   }
 }
 
@@ -428,6 +458,7 @@ export interface IndexEntry {
   type: string
   name: string
   status: LinkStatus // only 'ok' becomes a link
+  color?: string // only for groups with status 'ok', so a hidden group's color is never found
 }
 
 export type EntryIndex = Map<string, IndexEntry>
@@ -446,6 +477,7 @@ export function indexFrom(all: LoadedFile[]): EntryIndex {
     const item: IndexEntry = loaded.ok
       ? { section, type: loaded.entry.type, name: loaded.entry.name, status: indexStatus(loaded.entry) }
       : { section, type: '', name: '', status: 'invalid' }
+    if (loaded.ok && item.status === 'ok' && item.type === 'group' && loaded.entry.color) item.color = loaded.entry.color
     // [[slug]] is global, so a slug used in two sections can't be linked until one is renamed.
     index.set(slug, index.has(slug) ? { section, type: item.type, name: item.name, status: 'ambiguous' } : item)
   }
@@ -611,22 +643,41 @@ const isPublicGroup = (index: EntryIndex, slug: string) => {
 export function publicMemberships(memberships: Membership[], index: EntryIndex): Membership[] {
   return memberships
     .filter((m) => m.status === 'current' && isPublicGroup(index, m.group))
-    .map((m) => ({ group: m.group, status: m.status }))
+    .map((m) => ({ group: m.group, status: m.status, order: m.order }))
 }
 
-// Public characters with a current membership to the group, sorted by name.
+// ---------------------------------------------------------------------------------------------
+// Team colors: a display accent only. A group's color is shown only if the group is public and not
+// retired. A character's comes from their primary group, through the filtered memberships only.
+// ---------------------------------------------------------------------------------------------
+
+export function groupColor(raw: RawEntry): string | null {
+  if (raw.type !== 'group' || raw.visibility !== 'public' || raw.canon === 'retired') return null
+  return raw.color ?? null
+}
+
+export function teamColorOf(raw: RawEntry, index: EntryIndex): string | null {
+  if (raw.type !== 'character') return null
+  const slug = primaryGroup(publicMemberships(raw.memberships, index))
+  return (slug && index.get(slug)?.color) || null
+}
+
+// Public characters with a current membership to the group, sorted by that membership's `order`
+// (leader first), ties by name, those without an order last (same rule as sortByOrder).
 export function membersOf(groupSlug: string, all: LoadedFile[]): Member[] {
-  return validEntries(all)
+  const members = validEntries(all)
     .filter((e) => e.type === 'character' && e.visibility === 'public')
-    .filter((e) => e.memberships.some((m) => m.group === groupSlug && m.status === 'current'))
-    .map((e) => ({
-      slug: e.slug,
-      name: e.name,
-      title: e.title,
-      href: hrefFor(e.section, e.type, e.slug),
-      bust: imagesFor(e).bust,
-    }))
-    .sort(byName)
+    .flatMap((e) => {
+      const m = e.memberships.find((m) => m.group === groupSlug && m.status === 'current')
+      return m ? [{ entry: e, name: e.name, order: m.order }] : []
+    })
+  return sortByOrder(members).map(({ entry: e }) => ({
+    slug: e.slug,
+    name: e.name,
+    title: e.title,
+    href: hrefFor(e.section, e.type, e.slug),
+    bust: imagesFor(e).bust,
+  }))
 }
 
 // Groups and places by `order` (ascending), ties by name, those without an order last.
@@ -748,8 +799,12 @@ function renderEntry(raw: RawEntry, index: EntryIndex, all: LoadedFile[]): Entry
       .map((s) => ({ heading: s.heading, html: renderMarkdown(s.src, index).html, canon: s.canon })),
     backlinks: backlinksTo(raw.slug, all, index),
   }
-  if (raw.type === 'character') entry.images = imagesFor(raw)
+  if (raw.type === 'character') {
+    entry.images = imagesFor(raw)
+    entry.teamColor = teamColorOf(raw, index)
+  }
   if (raw.type === 'group') {
+    entry.color = groupColor(raw)
     entry.kind = raw.kind
     entry.status = raw.status
     entry.order = raw.order
@@ -817,6 +872,8 @@ export function summariesFrom(all: LoadedFile[], section: string, type?: string)
       memberships: publicMemberships(entry.memberships, index),
       bust: images.bust,
       alt: images.alt,
+      color: groupColor(entry),
+      teamColor: teamColorOf(entry, index),
     })
   }
   return type === 'group' || type === 'place' ? sortByOrder(summaries) : summaries.sort(byName)
@@ -950,6 +1007,35 @@ export function checkMedia(all: LoadedFile[], listing: Map<string, string[]>): L
   return problems
 }
 
+// Team color checks, pure. Warnings only: a color on a non-group, two public groups sharing a
+// color, and a color whose drawn shade has less than 3:1 contrast against a theme's backgrounds.
+export function checkColors(all: LoadedFile[]): LinkProblem[] {
+  const problems: LinkProblem[] = []
+  const warn = (kind: string, file: string, where: string, slug: string) =>
+    problems.push({ level: 'warn', kind, file, where, slug, plain: true })
+  const byColor = new Map<string, string[]>() // color -> files of public groups using it
+
+  for (const { section, slug, loaded } of all) {
+    if (!loaded.ok) continue
+    const file = `seed/${section}/${slug}.md`
+    const raw = loaded.entry
+    if (raw.ignoredColor !== undefined) warn('color on a non-group (ignored)', file, 'color', raw.ignoredColor || '(empty)')
+    const color = groupColor(raw)
+    if (!color) continue
+    byColor.set(color, [...(byColor.get(color) ?? []), file])
+    const contrast = themeContrast(color)
+    const drawn = effectiveColors(color)
+    for (const theme of ['dark', 'light'] as const) {
+      if (contrast[theme] < 3)
+        warn(`contrast ${contrast[theme].toFixed(2)}:1 in ${theme} theme (shown as ${drawn[theme]}), below 3:1`, file, 'color', color)
+    }
+  }
+  for (const [color, files] of byColor) {
+    if (files.length > 1) warn('same color on more than one group', files.join(' and '), 'color', color)
+  }
+  return problems
+}
+
 // media/ as folder -> file names (files only). Missing media/ is an empty listing.
 async function mediaListing(): Promise<Map<string, string[]>> {
   const listing = new Map<string, string[]>()
@@ -972,5 +1058,5 @@ async function readdirTyped(dir: string) {
 
 export async function checkLinks(): Promise<LinkProblem[]> {
   const all = await loadAll()
-  return [...checkProblems(all), ...checkMedia(all, await mediaListing())]
+  return [...checkProblems(all), ...checkMedia(all, await mediaListing()), ...checkColors(all)]
 }

@@ -31,14 +31,14 @@ h2 {
   align-items: baseline;
   gap: 0.5rem;
   padding-bottom: 0.25rem;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--team-shade, var(--border)); /* team color on character and group pages */
 }
 
 /* Our own arrow: points right when closed, down when open. */
 h2::before {
   content: '▸';
   font-size: 0.8em;
-  color: var(--accent);
+  color: var(--team-shade, var(--accent));
   transition: transform 0.2s;
 }
 

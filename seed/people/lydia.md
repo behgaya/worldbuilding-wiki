@@ -1,12 +1,15 @@
 ---
 type: character
-slug: sokah
-name: Sokah
+slug: lydia
+name: Lydia
+caption: Team Hollow
 canon: canon
 visibility: public
 development: stub
 memberships:
-  - group: team-neo
+  - group: team-hollow
     status: current
     order: 2
 ---
+
+A member of [[team-hollow]].

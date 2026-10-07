@@ -1,12 +1,15 @@
 ---
 type: character
-slug: sokah
-name: Sokah
+slug: melissa
+name: Melissa
+caption: Team Neo
 canon: canon
 visibility: public
 development: stub
 memberships:
   - group: team-neo
     status: current
-    order: 2
+    order: 1
 ---
+
+A member of [[team-neo]].

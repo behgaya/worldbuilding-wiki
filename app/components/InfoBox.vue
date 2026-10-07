@@ -66,6 +66,9 @@ const visibleGroups = computed(() =>
 }
 
 .infobox-title {
+  /* A 2px line in the team color, drawn over the divider below. Transparent without a team
+     color, so place infoboxes keep their plain divider. */
+  box-shadow: inset 0 -2px 0 var(--team-shade, transparent);
   margin: 0;
   padding: 0.75rem 1rem;
   font-family: var(--font-heading);

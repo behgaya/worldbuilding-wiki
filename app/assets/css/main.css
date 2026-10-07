@@ -76,3 +76,22 @@ button {
   font: inherit;
   color: inherit;
 }
+
+/* Team accent: a display accent for lines and shapes only, never text or fills.
+   An element opts in with the class "team" and --team set to a validated hex (see teamStyle).
+   Light theme: darkened for contrast (the same 65% as shadeForLight in shared/utils/color.ts).
+   Dark theme: as written. Without --team, --team-shade is invalid and each use falls back,
+   e.g. var(--team-shade, var(--accent)). */
+.team {
+  --team-shade: color-mix(in srgb, var(--team) 65%, black);
+}
+
+:root[data-theme='dark'] .team {
+  --team-shade: var(--team);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .team {
+    --team-shade: var(--team);
+  }
+}

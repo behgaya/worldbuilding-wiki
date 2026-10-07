@@ -1,12 +1,15 @@
 ---
 type: character
-slug: jonathan
-name: Jonathan
+slug: lirio
+name: Lirio
+caption: Team Blackthorn
 canon: canon
 visibility: public
 development: stub
 memberships:
-  - group: team-delta
+  - group: team-blackthorn
     status: current
     order: 1
 ---
+
+A member of [[team-blackthorn]].

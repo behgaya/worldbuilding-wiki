@@ -23,6 +23,7 @@ interface Block {
   key: string
   name: string
   href?: string
+  color?: string | null // the group's team color, for the accent bar under the heading
   members: Character[]
 }
 
@@ -38,7 +39,7 @@ const groups = computed(() => {
   const blocks: Block[] = []
   for (const g of groupList.value ?? []) {
     const members = bySlug.get(g.slug)
-    if (members) blocks.push({ key: g.slug, name: g.name, href: `/people/groups/${g.slug}`, members })
+    if (members) blocks.push({ key: g.slug, name: g.name, href: `/people/groups/${g.slug}`, color: g.color, members: byTeamOrder(members, g.slug) })
     bySlug.delete(g.slug)
   }
   // No group, or a group this list doesn't know: Unaffiliated, always last.
@@ -46,6 +47,18 @@ const groups = computed(() => {
   if (rest.length) blocks.push({ key: 'unaffiliated', name: UNAFFILIATED, members: rest })
   return blocks
 })
+
+// Inside a team: by each character's membership `order` for that team (leader first), then by
+// name; those without an order come after, still by name. The input is already sorted by name.
+function byTeamOrder(members: Character[], groupSlug: string) {
+  const orderIn = (c: Character) => c.memberships.find((m) => m.group === groupSlug)?.order
+  return [...members].sort((a, b) => {
+    const oa = orderIn(a)
+    const ob = orderIn(b)
+    if (oa === undefined || ob === undefined) return oa === ob ? 0 : oa === undefined ? 1 : -1
+    return oa - ob
+  })
+}
 
 // What the template renders: one block per team, or a single unnamed block for A to Z.
 const blocks = computed<Block[]>(() =>
@@ -82,13 +95,14 @@ const withQuery = (key: 'group' | 'view', value: string) => ({ query: { ...route
     <p v-if="!sorted.length">No characters yet.</p>
 
     <section v-for="b in blocks" v-else :key="b.key">
-      <h2 v-if="b.name">
+      <!-- Team colors are set as a CSS variable only (validated hex), and used for lines, not text. -->
+      <h2 v-if="b.name" class="team" :style="teamStyle(b.color)">
         <NuxtLink v-if="b.href" :to="b.href">{{ b.name }}</NuxtLink>
         <template v-else>{{ b.name }}</template>
       </h2>
       <ul :class="view">
         <li v-for="c in b.members" :key="c.slug">
-          <NuxtLink :to="`/people/characters/${c.slug}`" class="item">
+          <NuxtLink :to="`/people/characters/${c.slug}`" class="item team" :style="teamStyle(c.teamColor)">
             <!-- Bust image, or the initials when there is none (or it fails to load). -->
             <CharacterPortrait
               v-if="view === 'grid'"
@@ -142,8 +156,20 @@ main {
 }
 
 h2 {
+  position: relative;
   padding-bottom: 0.25rem;
   border-bottom: 1px solid var(--border);
+}
+
+/* A short bar in the team's color under the heading (gold for Unaffiliated). */
+h2::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 3rem;
+  height: 2px;
+  background: var(--team-shade, var(--accent));
 }
 
 ul {
@@ -199,6 +225,7 @@ ul.grid {
   gap: 0.25rem;
   padding: 0.75rem;
   text-align: center;
+  border: 2px solid var(--team-shade, var(--border)); /* the team's color, neutral without one */
 }
 
 .grid .item:hover,
@@ -221,6 +248,12 @@ ul.grid {
   color: var(--accent);
 }
 
+/* Initials: outline in the team color, letters mixed toward the text color. */
+span.portrait {
+  border-color: var(--team-shade, var(--accent));
+  color: color-mix(in srgb, var(--team-shade, var(--accent)) 70%, var(--ink));
+}
+
 /* A real bust fills the square, cropped from the top so the face stays in view. */
 img.portrait {
   display: block;
@@ -234,7 +267,7 @@ img.portrait {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  border: 1px solid var(--border);
+  border: 2px solid var(--team-shade, var(--accent));
   object-fit: cover;
   object-position: top center;
 }

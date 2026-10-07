@@ -51,7 +51,8 @@ onBeforeUnmount(() => clearTimeout(resetTimer))
 
 <template>
   <main>
-    <article v-if="character">
+    <!-- Team color: a CSS variable (validated hex) for thin lines only; text keeps its colors. -->
+    <article v-if="character" class="team" :style="teamStyle(character.teamColor)">
       <header>
         <div>
           <h1>{{ character.name }}</h1>
@@ -93,6 +94,12 @@ header {
 
 header h1 {
   margin-bottom: 0.25rem;
+}
+
+/* A thin line under the name and title, in the character's team color (gold without one). */
+header {
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid var(--team-shade, var(--accent));
 }
 
 .copy {

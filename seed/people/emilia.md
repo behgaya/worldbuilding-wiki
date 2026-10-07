@@ -14,6 +14,7 @@ images:
 memberships:
   - group: team-vulcan
     status: current
+    order: 2
 infobox:
   - title: Personal
     rows:
